@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}QDX 系统更新{% endblock %}
+
+{% block body %}
+<div class="container">
+  {{ utils.header(current_user, title="系统更新", sup=False, about=True) }}
+
+  <div class="row">
+    <div class="col-md-8 col-md-offset-2">
+
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h3 class="panel-title">版本信息</h3>
+        </div>
+        <div class="panel-body">
+          <table class="table table-bordered">
+            <tbody>
+              <tr>
+                <th style="width: 140px;">当前版本</th>
+                <td id="cur_version">加载中...</td>
+              </tr>
+              <tr>
+                <th>更新源</th>
+                <td>
+                  <a href="{{ update_repo_url }}" target="_blank" rel="nofollow">
+                    {{ update_repo }}
+                  </a>
+                </td>
+              </tr>
+              <tr>
+                <th>最近更新</th>
+                <td id="last_update">—</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="btn-group">
+            <button class="btn btn-primary" id="btn_check">
+              <span class="glyphicon glyphicon-refresh"></span> 检查更新
+            </button>
+            <button class="btn btn-success" id="btn_update" disabled>
+              <span class="glyphicon glyphicon-download-alt"></span> 立即更新
+            </button>
+            <a class="btn btn-default" href="{{ update_repo_url }}/releases" target="_blank" rel="nofollow">
+              查看历史版本
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel panel-default" id="panel_result" style="display:none;">
+        <div class="panel-heading">
+          <h3 class="panel-title" id="result_title">更新结果</h3>
+        </div>
+        <div class="panel-body">
+          <div id="result_msg"></div>
+          <pre id="result_log" style="max-height: 400px; overflow: auto; display:none;"></pre>
+        </div>
+      </div>
+
+      <div class="panel panel-default">
+        <div class="panel-heading">
+          <h3 class="panel-title">更新说明</h3>
+        </div>
+        <div class="panel-body">
+          <p>QDX 支持在程序内直接更新，<b>不需要重新安装 FPK 安装包</b>。</p>
+          <ul>
+            <li>更新前会自动备份当前代码，失败可回滚</li>
+            <li>数据库与配置存放于独立的数据目录，更新不会丢失</li>
+            <li>更新完成后服务会自动重启</li>
+          </ul>
+          <p class="text-muted">
+            如果更新失败，可在应用日志中查看详细原因。数据目录中的
+            <code>backup/</code> 保留了历史版本，可手动回退。
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+$(function() {
+  var checkUrl = '/system/check_update/';
+  var updateUrl = '/system/do_update/';
+  var versionUrl = '/system/version/';
+
+  function showResult(title, msg, cls, log) {
+    $('#panel_result').show();
+    $('#result_title').text(title);
+    $('#result_msg')
+      .removeClass('alert alert-success alert-danger alert-info')
+      .addClass('alert ' + cls)
+      .html(msg);
+    if (log && log.length) {
+      $('#result_log').show().text(log.join('\n'));
+    } else {
+      $('#result_log').hide().text('');
+    }
+  }
+
+  function loadVersion() {
+    $.getJSON(versionUrl, function(d) {
+      if (d.code) {
+        $('#cur_version').text(d.version || '未知');
+        if (d.last_update) {
+          var lu = d.last_update;
+          $('#last_update').text(
+            (lu.from || '?') + ' → ' + (lu.to || '?') +
+            (lu.published_at ? '  (' + lu.published_at.slice(0, 10) + ')' : '')
+          );
+        }
+      }
+    }).fail(function() {
+      $('#cur_version').text('读取失败');
+    });
+  }
+
+  $('#btn_check').click(function() {
+    var $btn = $(this);
+    $btn.prop('disabled', true).text('检查中...');
+    $('#btn_update').prop('disabled', true);
+
+    $.getJSON(checkUrl, function(d) {
+      if (!d.code) {
+        showResult('检查失败', d.message || '未知错误', 'alert-danger');
+        return;
+      }
+      if (d.has_update) {
+        var msg = '发现新版本：<b>' + d.local + '</b> → <b>' + d.remote + '</b>';
+        if (d.name) msg += '<br>' + $('<div>').text(d.name).html();
+        if (d.body) {
+          msg += '<hr><div style="max-height:240px;overflow:auto;white-space:pre-wrap;">' +
+                 $('<div>').text(d.body).html() + '</div>';
+        }
+        showResult('有新版本可用', msg, 'alert-info');
+        $('#btn_update').prop('disabled', false).data('version', d.remote);
+      } else {
+        showResult('已是最新', '当前版本 <b>' + (d.local || '') + '</b> 已是最新，无需更新。', 'alert-success');
+      }
+    }).fail(function(x) {
+      showResult('检查失败', '请求失败：' + (x.statusText || x.status), 'alert-danger');
+    }).always(function() {
+      $btn.prop('disabled', false).html('<span class="glyphicon glyphicon-refresh"></span> 检查更新');
+    });
+  });
+
+  $('#btn_update').click(function() {
+    var ver = $(this).data('version') || '';
+    if (!confirm('确定要更新到 ' + ver + ' 吗？\n\n更新过程会重启服务，期间无法访问。\n数据库与配置会自动保留。')) {
+      return;
+    }
+    var $btn = $(this);
+    $btn.prop('disabled', true).text('更新中，请勿关闭页面...');
+    $('#btn_check').prop('disabled', true);
+
+    showResult('正在更新', '正在下载并安装新版本，请耐心等待，此过程可能需要几分钟...', 'alert-info');
+
+    $.ajax({
+      url: updateUrl,
+      type: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({version: ver}),
+      dataType: 'json',
+      timeout: 900000,
+    }).done(function(d) {
+      if (d.code) {
+        showResult('更新成功', d.message || '更新完成', 'alert-success', d.detail);
+        setTimeout(function() { location.reload(); }, 5000);
+      } else {
+        showResult('更新失败', d.message || '未知错误', 'alert-danger', d.detail);
+      }
+    }).fail(function(x) {
+      // 更新过程中服务会重启，连接中断属正常现象
+      showResult(
+        '更新进行中或已完成',
+        '与服务端的连接已中断。这通常表示服务正在重启，属正常现象。<br>' +
+        '请等待约 30 秒后刷新页面查看版本号是否已变化。',
+        'alert-info'
+      );
+    }).always(function() {
+      $btn.html('<span class="glyphicon glyphicon-download-alt"></span> 立即更新');
+      $('#btn_check').prop('disabled', false);
+    });
+  });
+
+  loadVersion();
+});
+</script>
+{% endblock %}

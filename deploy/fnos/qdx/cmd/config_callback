@@ -1,0 +1,56 @@
+#!/bin/bash
+# QDX 配置变更后 - 在应用设置页修改环境变量后执行
+#
+# 用户在设置页修改的向导变量会以环境变量形式传入。
+# 这里把它们写入 env.sh，然后重启服务使配置生效。
+
+set -u
+
+APP_DIR="${TRIM_APPDEST}"
+DATA_DIR="${TRIM_PKGVAR}"
+ETC_DIR="${TRIM_PKGETC}"
+LOG_FILE="${DATA_DIR}/config.log"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_FILE}" 2>/dev/null
+}
+
+mkdir -p "${ETC_DIR}" "${DATA_DIR}" 2>/dev/null
+
+log "=== 配置变更处理 ==="
+
+# 生成环境变量文件：路径变量 + 用户在向导中设置的自定义变量
+{
+    echo "# QDX 运行环境变量 - 由 config_callback 生成"
+    echo "QDX_DATA_DIR=\"${DATA_DIR}\""
+    echo "QDX_ETC_DIR=\"${ETC_DIR}\""
+
+    # 透传用户可配置项（仅在非空时写入）
+    for var in DOMAIN COOKIE_SECRET PBKDF2_ITERATIONS AUTO_RELOAD DEBUG \
+               DB_TYPE MYSQL_URL REDIS_URL PROXY TRACEBACK_PRINT \
+               PUSH_PIC_URL PUSH_BATCH_SW PUSH_BATCH_DELTA; do
+        eval "val=\${${var}:-}"
+        if [ -n "${val}" ]; then
+            echo "${var}=\"${val}\""
+            log "配置项 ${var} 已更新"
+        fi
+    done
+} > "${ETC_DIR}/env.sh" 2>/dev/null
+
+log "环境变量文件已更新: ${ETC_DIR}/env.sh"
+
+# 重启服务使配置生效
+if [ -x "${APP_DIR}/cmd/main" ]; then
+    log "重启服务"
+    "${APP_DIR}/cmd/main" stop >> "${LOG_FILE}" 2>&1
+    sleep 1
+    "${APP_DIR}/cmd/main" start >> "${LOG_FILE}" 2>&1
+    if [ $? -eq 0 ]; then
+        log "服务已重启，配置生效"
+    else
+        log "警告: 服务重启失败，请手动重启应用"
+    fi
+fi
+
+log "=== 配置变更完成 ==="
+exit 0

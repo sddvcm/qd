@@ -1,0 +1,37 @@
+#!/bin/bash
+# QDX 卸载清理后 - 在应用文件被移除后执行
+#
+# 只清理应用自身的临时产物（虚拟环境、临时文件）。
+# 用户数据（database.db、备份、日志）保留在 TRIM_PKGVAR，不主动删除。
+
+set -u
+
+DATA_DIR="${TRIM_PKGVAR}"
+LOG_FILE="${DATA_DIR}/uninstall.log"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "${LOG_FILE}" 2>/dev/null
+}
+
+log "--- 卸载清理 ---"
+
+# 清理虚拟环境（可由安装流程重建，不必保留）
+VENV_DIR="${DATA_DIR}/venv"
+if [ -d "${VENV_DIR}" ]; then
+    rm -rf "${VENV_DIR}" 2>/dev/null
+    log "已清理虚拟环境: ${VENV_DIR}"
+fi
+
+# 确认服务已停止
+if pgrep -f "run.py" >/dev/null 2>&1; then
+    pkill -9 -f "run.py" 2>/dev/null
+    log "清理残留进程"
+fi
+
+# 保留用户数据的明确提示
+if [ -f "${DATA_DIR}/database.db" ]; then
+    log "用户数据库已保留: ${DATA_DIR}/database.db"
+fi
+
+log "=== 卸载清理完成 ==="
+exit 0

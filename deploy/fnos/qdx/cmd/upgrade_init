@@ -1,0 +1,60 @@
+#!/bin/bash
+# QDX 升级前 - 在应用文件被替换前执行
+#
+# 关键：备份数据库与配置到 TRIM_PKGVAR。
+# fnOS 升级时会替换 target 目录（应用源码），但 TRIM_PKGVAR 保留。
+# 数据库本身就在 TRIM_PKGVAR，这里额外做一次快照以防回滚。
+
+set -u
+
+DATA_DIR="${TRIM_PKGVAR}"
+LOG_FILE="${DATA_DIR}/upgrade.log"
+BACKUP_DIR="${DATA_DIR}/backup/upgrade-${TRIM_OLD_APPVER:-unknown}-$(date +%Y%m%d%H%M%S)"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_FILE}" 2>/dev/null
+}
+
+mkdir -p "${DATA_DIR}" 2>/dev/null
+
+log "=== 升级前处理: ${TRIM_OLD_APPVER:-?} -> ${TRIM_APPVER:-?} ==="
+
+# 停止正在运行的服务，避免升级过程中数据库被写入
+PID_FILE="${DATA_DIR}/qdx.pid"
+if [ -f "${PID_FILE}" ]; then
+    PID=$(cat "${PID_FILE}" 2>/dev/null)
+    if [ -n "${PID}" ] && kill -0 "${PID}" 2>/dev/null; then
+        log "停止运行中的服务 (PID=${PID})"
+        kill "${PID}" 2>/dev/null
+        WAITED=0
+        while [ ${WAITED} -lt 15 ]; do
+            kill -0 "${PID}" 2>/dev/null || break
+            sleep 1
+            WAITED=$((WAITED + 1))
+        done
+        kill -9 "${PID}" 2>/dev/null
+    fi
+    rm -f "${PID_FILE}"
+fi
+
+# 备份数据库
+DB_FILE="${DATA_DIR}/database.db"
+if [ -f "${DB_FILE}" ]; then
+    mkdir -p "${BACKUP_DIR}" 2>/dev/null
+    if cp -f "${DB_FILE}" "${BACKUP_DIR}/database.db" 2>/dev/null; then
+        log "数据库已备份到 ${BACKUP_DIR}/database.db"
+    else
+        log "警告: 数据库备份失败，但升级继续"
+    fi
+fi
+
+# 只保留最近 5 份备份，避免占满空间
+BACKUP_ROOT="${DATA_DIR}/backup"
+if [ -d "${BACKUP_ROOT}" ]; then
+    ls -1dt "${BACKUP_ROOT}"/upgrade-* 2>/dev/null | tail -n +6 | while read -r old; do
+        rm -rf "${old}" 2>/dev/null
+        log "清理旧备份: ${old}"
+    done
+fi
+
+exit 0

@@ -1,0 +1,54 @@
+#!/bin/bash
+# QDX 卸载前 - 在应用文件被移除前执行
+#
+# 停止服务并把数据目录信息写入日志，方便用户卸载后找回。
+# 不删除任何用户数据——数据库在 TRIM_PKGVAR，由 fnOS 决定是否清理。
+
+set -u
+
+DATA_DIR="${TRIM_PKGVAR}"
+LOG_FILE="${DATA_DIR}/uninstall.log"
+PID_FILE="${DATA_DIR}/qdx.pid"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_FILE}" 2>/dev/null
+}
+
+mkdir -p "${DATA_DIR}" 2>/dev/null
+
+log "=== 卸载前处理 ==="
+
+# 停止服务
+if [ -f "${PID_FILE}" ]; then
+    PID=$(cat "${PID_FILE}" 2>/dev/null)
+    if [ -n "${PID}" ] && kill -0 "${PID}" 2>/dev/null; then
+        log "停止服务 (PID=${PID})"
+        kill "${PID}" 2>/dev/null
+        WAITED=0
+        while [ ${WAITED} -lt 10 ]; do
+            kill -0 "${PID}" 2>/dev/null || break
+            sleep 1
+            WAITED=$((WAITED + 1))
+        done
+        kill -9 "${PID}" 2>/dev/null
+    fi
+    rm -f "${PID_FILE}"
+fi
+
+# 兜底：清理可能残留的 QDX 进程
+pkill -f "${TRIM_APPDEST}/run.py" 2>/dev/null
+
+# 导出数据库备份，便于用户保留
+DB_FILE="${DATA_DIR}/database.db"
+if [ -f "${DB_FILE}" ]; then
+    EXPORT_FILE="${DATA_DIR}/qdx-database-backup.db"
+    if cp -f "${DB_FILE}" "${EXPORT_FILE}" 2>/dev/null; then
+        log "数据库已备份: ${EXPORT_FILE}"
+        log "如需保留数据，请在卸载前复制该文件。"
+    fi
+fi
+
+log "用户数据目录: ${DATA_DIR}"
+log "卸载后该目录可能被系统清理，重要数据请提前备份。"
+
+exit 0

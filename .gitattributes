@@ -1,0 +1,38 @@
+# QDX 换行符规则
+#
+# 关键: 飞牛 fnOS 是 Linux 系统, cmd/ 下的生命周期脚本必须是 LF 换行。
+# 如果在 Windows 上开发时被 git 自动转成 CRLF, 脚本在 NAS 上会报
+# "bad interpreter: No such file or directory" 而完全无法执行。
+
+# 默认行为: 由 git 自动判断，但下面的规则优先
+* text=auto
+
+# shell 脚本强制 LF
+*.sh text eol=lf
+deploy/fnos/qdx/cmd/* text eol=lf
+
+# Docker 与应用配置保持 LF
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# manifest 与向导保持 LF（INI/JSON 格式，Windows 换行可能引发解析问题）
+deploy/fnos/qdx/manifest text eol=lf
+deploy/fnos/qdx/wizard/* text eol=lf
+deploy/fnos/qdx/config/* text eol=lf
+
+# Python 源码保持 LF
+*.py text eol=lf
+
+# 二进制文件不做转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.fpk binary
+*.whl binary
+*.tar.gz binary
+*.har binary
+*.db binary

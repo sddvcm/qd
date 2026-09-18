@@ -187,3 +187,23 @@ cache
 
 alembic.ini
 .hintrc
+
+# QDX - 飞牛 FPK 构建产物
+# app/ 下的源码由 build_fpk.py 从仓库根同步，构建时重新生成，不入库
+deploy/fnos/qdx/app/**
+
+# 保留 app 的目录占位说明，避免 clone 后目录缺失
+!deploy/fnos/qdx/app/.gitkeep
+
+# fnpack 打包产物
+*.fpk
+
+# 构建工具与临时文件
+tools/
+wheels-tmp/
+templates-snapshot/
+req-clean.txt
+req-nosql.txt
+req-fnos.txt
+dl.log
+dl2.log

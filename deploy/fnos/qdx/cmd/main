@@ -1,0 +1,170 @@
+#!/bin/bash
+# QDX 生命周期主脚本 - 处理 start / stop / status
+#
+# 运行方式: 原生模式（非 Docker），在 fnOS 主机上直接以应用用户身份运行 Python 进程。
+# 进程通过 PID 文件管理，日志写到 TRIM_PKGVAR。
+
+set -u
+
+APP_DIR="${TRIM_APPDEST}"
+DATA_DIR="${TRIM_PKGVAR}"
+ETC_DIR="${TRIM_PKGETC}"
+TMP_DIR="${TRIM_PKGTMP}"
+LOG_FILE="${TRIM_PKGVAR}/qdx.log"
+PID_FILE="${TRIM_PKGVAR}/qdx.pid"
+SERVICE_PORT="${TRIM_SERVICE_PORT:-8923}"
+VENV_DIR="${TRIM_PKGVAR}/venv"
+PY="${VENV_DIR}/bin/python"
+
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "${LOG_FILE}" 2>/dev/null
+}
+
+fail() {
+    # 向用户可见的日志文件输出错误
+    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
+        echo "$*" > "${TRIM_TEMP_LOGFILE}"
+    fi
+    log "ERROR: $*"
+    exit 1
+}
+
+# 检查进程是否存活（读取 PID 文件并验证进程存在）
+is_running() {
+    if [ ! -f "${PID_FILE}" ]; then
+        return 1
+    fi
+    local pid
+    pid=$(cat "${PID_FILE}" 2>/dev/null)
+    if [ -z "${pid}" ]; then
+        return 1
+    fi
+    if kill -0 "${pid}" 2>/dev/null; then
+        return 0
+    fi
+    # PID 文件存在但进程已死，清理残留
+    rm -f "${PID_FILE}"
+    return 1
+}
+
+do_start() {
+    if is_running; then
+        log "已在运行，跳过启动 (PID=$(cat ${PID_FILE}))"
+        exit 0
+    fi
+
+    if [ ! -x "${PY}" ]; then
+        fail "Python 虚拟环境不存在，请重新安装应用。期望路径: ${VENV_DIR}"
+    fi
+
+    if [ ! -f "${APP_DIR}/run.py" ]; then
+        fail "应用文件缺失: ${APP_DIR}/run.py"
+    fi
+
+    mkdir -p "${DATA_DIR}" "${ETC_DIR}" "${TMP_DIR}" 2>/dev/null
+
+    log "启动 QDX (端口 ${SERVICE_PORT})"
+
+    cd "${APP_DIR}" || fail "无法进入应用目录 ${APP_DIR}"
+
+    # 环境变量在 install/upgrade 阶段写入 ${ETC_DIR}/env.sh，此处加载
+    if [ -f "${ETC_DIR}/env.sh" ]; then
+        # shellcheck disable=SC1091
+        . "${ETC_DIR}/env.sh"
+    fi
+
+    # 使用 PID 文件而非 nohup 简单后台，便于 status 判断
+    PORT="${SERVICE_PORT}" \
+    BIND="0.0.0.0" \
+    PYTHONUNBUFFERED=1 \
+    QDX_DATA_DIR="${DATA_DIR}" \
+    QDX_ETC_DIR="${ETC_DIR}" \
+    "${PY}" "${APP_DIR}/run.py" >> "${LOG_FILE}" 2>&1 &
+
+    local pid=$!
+    echo "${pid}" > "${PID_FILE}"
+
+    # 等待端口就绪，最多 30 秒
+    local waited=0
+    while [ ${waited} -lt 30 ]; do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            rm -f "${PID_FILE}"
+            fail "QDX 进程启动后立即退出，请查看日志: ${LOG_FILE}"
+        fi
+        if command -v ss >/dev/null 2>&1; then
+            if ss -ltn 2>/dev/null | grep -q ":${SERVICE_PORT} "; then
+                log "端口 ${SERVICE_PORT} 已就绪 (PID=${pid})"
+                exit 0
+            fi
+        else
+            # 无 ss 命令时退化为进程存活检查
+            log "已启动 (PID=${pid})，未找到 ss 命令跳过端口检查"
+            exit 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    # 超时但进程还在，视为启动中
+    if kill -0 "${pid}" 2>/dev/null; then
+        log "启动超时 30s，但进程存活 (PID=${pid})，继续运行"
+        exit 0
+    fi
+
+    rm -f "${PID_FILE}"
+    fail "QDX 启动失败，请查看日志: ${LOG_FILE}"
+}
+
+do_stop() {
+    if ! is_running; then
+        log "未在运行，无需停止"
+        exit 0
+    fi
+
+    local pid
+    pid=$(cat "${PID_FILE}")
+    log "停止 QDX (PID=${pid})"
+
+    kill "${pid}" 2>/dev/null
+
+    # 优雅等待最多 15 秒
+    local waited=0
+    while [ ${waited} -lt 15 ]; do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+            rm -f "${PID_FILE}"
+            log "已停止"
+            exit 0
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    # 强制结束
+    log "优雅停止超时，强制结束 (PID=${pid})"
+    kill -9 "${pid}" 2>/dev/null
+    sleep 1
+    rm -f "${PID_FILE}"
+    exit 0
+}
+
+do_status() {
+    if is_running; then
+        exit 0    # 0 = 运行中
+    fi
+    exit 3        # 3 = 未运行
+}
+
+case "${1:-}" in
+    start)
+        do_start
+        ;;
+    stop)
+        do_stop
+        ;;
+    status)
+        do_status
+        ;;
+    *)
+        fail "未知命令: ${1:-（空）}，支持 start / stop / status"
+        ;;
+esac

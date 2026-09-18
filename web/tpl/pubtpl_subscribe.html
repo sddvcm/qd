@@ -22,8 +22,20 @@
         href="/subscribe/signup_repos/{{userid}}/" title="注册模板仓库">注册</button>
       <button type="button" data-load-method="GET" class="btn btn-default modal_load"
         href="/subscribe/unsubscribe_repos/{{userid}}/" title="取消注册此仓库">退订</button>
+      <a class="btn btn-info" href="/subscribe/repos/export/" title="把当前所有订阅源导出为 JSON 文件，可用于备份或迁移到其他 QDX 实例">
+        <span class="glyphicon glyphicon-export"></span> 导出订阅源
+      </a>
+      <button type="button" class="btn btn-info" id="btn_import_repos"
+        title="从 JSON 文件恢复订阅源，重复的会自动跳过">
+        <span class="glyphicon glyphicon-import"></span> 导入订阅源
+      </button>
+      <a class="btn btn-warning" href="/subscribe/templates/export/" title="导出已导入的公共模板库，可作为订阅源使用">
+        <span class="glyphicon glyphicon-download-alt"></span> 导出模板库
+      </a>
+      <input type="file" id="file_import_repos" accept=".json,application/json" style="display:none;">
       {% endif %}
     </h2>
+    <div id="repo_io_msg" style="display:none;"></div>
     <table id="register_repo" class="table table-hover tablesorter">
       <thead>
         <tr>
@@ -326,6 +338,56 @@
       }
     });
   })
+</script>
+
+<script>
+// 订阅源导入
+$(function() {
+  function showMsg(html, cls) {
+    $('#repo_io_msg')
+      .show()
+      .removeClass('alert alert-success alert-danger alert-info')
+      .addClass('alert ' + cls)
+      .html(html);
+  }
+
+  $('#btn_import_repos').click(function() {
+    $('#file_import_repos').val('').trigger('click');
+  });
+
+  $('#file_import_repos').change(function() {
+    var file = this.files && this.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      showMsg('文件过大（超过 5MB），请确认选择了正确的订阅源文件。', 'alert-danger');
+      return;
+    }
+
+    var fd = new FormData();
+    fd.append('file', file);
+
+    showMsg('正在导入 ' + file.name + ' ...', 'alert-info');
+
+    $.ajax({
+      url: '/subscribe/repos/import/',
+      type: 'POST',
+      data: fd,
+      processData: false,
+      contentType: false,
+      dataType: 'json',
+    }).done(function(d) {
+      if (d.code) {
+        showMsg(d.message + '<br>正在刷新页面以显示新订阅源...', 'alert-success');
+        setTimeout(function() { location.reload(); }, 1500);
+      } else {
+        showMsg('导入失败：' + (d.message || '未知错误'), 'alert-danger');
+      }
+    }).fail(function(x) {
+      showMsg('导入请求失败：' + (x.statusText || x.status), 'alert-danger');
+    });
+  });
+});
 </script>
 
 
