@@ -17,7 +17,7 @@ from libs.fetcher import Fetcher
 from libs.log import Log
 from web.handlers import handlers, ui_methods, ui_modules
 
-logger_web = Log('QD.Web').getlogger()
+logger_web = Log('QDX.Web').getlogger()
 
 
 class Application(tornado.web.Application):

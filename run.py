@@ -29,7 +29,7 @@ if sys.getdefaultencoding() != 'utf-8':
 def start_server():
     # init logging
     logger = Log().getlogger()
-    logger_qd = Log('QD.Run').getlogger()
+    logger_qd = Log('QDX.Run').getlogger()
 
     if config.debug:
         channel = logging.StreamHandler(sys.stderr)

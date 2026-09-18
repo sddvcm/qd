@@ -18,7 +18,7 @@ from db import DB
 from libs import utils
 from libs.log import Log
 
-logger_funcs = Log('QD.Http.Funcs').getlogger()
+logger_funcs = Log('QDX.Http.Funcs').getlogger()
 
 
 class Pusher:

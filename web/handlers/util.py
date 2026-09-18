@@ -26,13 +26,13 @@ from config import delay_max_timeout, strtobool
 from libs.log import Log
 from web.handlers.base import BaseHandler, logger_web_handler
 
-logger_web_util = Log("QD.Web.Util").getlogger()
+logger_web_util = Log("QDX.Web.Util").getlogger()
 try:
     import ddddocr  # type: ignore
 except ImportError as e:
     if config.display_import_warning:
         logger_web_util.warning(
-            'Import DdddOCR module falied: "%s". \nTips: This warning message is only for prompting, it will not affect running of QD framework.',
+            'Import DdddOCR module falied: "%s". \nTips: This warning message is only for prompting, it will not affect running of QDX framework.',
             e,
         )
     ddddocr = None

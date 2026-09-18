@@ -19,7 +19,7 @@ from tornado import httpclient
 import config
 from libs.log import Log
 
-logger_CookieJar = Log('QD.Http.CookieJar').getlogger()
+logger_CookieJar = Log('QDX.Http.CookieJar').getlogger()
 
 
 def _debug(*args):

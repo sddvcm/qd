@@ -19,7 +19,7 @@ try:
 except ImportError:
     REDIS = None
 
-logger_redis_db = Log('QD.RedisDB').getlogger()
+logger_redis_db = Log('QDX.RedisDB').getlogger()
 
 
 class RedisDB(object):
@@ -34,7 +34,7 @@ class RedisDB(object):
             self.client.ping()
         except redis.ConnectionError as e:
             if config.display_import_warning:
-                logger_redis_db.warning('Connect Redis falied: \"%s\". \nTips: This warning message is only for prompting, it will not affect running of QD framework. ', e)
+                logger_redis_db.warning('Connect Redis falied: \"%s\". \nTips: This warning message is only for prompting, it will not affect running of QDX framework. ', e)
             self.client = None
 
     def evil(self, ip, userid, cnt=None):

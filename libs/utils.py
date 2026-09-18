@@ -47,7 +47,7 @@ except ImportError:
     # Assume we're running in FIPS mode here
     _md5 = None  # type: ignore
 
-logger_util = Log('QD.Http.Util').getlogger()
+logger_util = Log('QDX.Http.Util').getlogger()
 
 
 def ip2int(addr):

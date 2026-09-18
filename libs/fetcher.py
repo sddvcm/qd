@@ -28,14 +28,14 @@ from libs.log import Log
 from libs.parse_url import parse_url
 from libs.safe_eval import safe_eval
 
-logger_fetcher = Log("QD.Http.Fetcher").getlogger()
+logger_fetcher = Log("QDX.Http.Fetcher").getlogger()
 if config.use_pycurl:
     try:
         import pycurl  # type: ignore
     except ImportError as e:
         if config.display_import_warning:
             logger_fetcher.warning(
-                'Import PyCurl module falied: "%s". \nTips: This warning message is only for prompting, it will not affect running of QD framework.',
+                'Import PyCurl module falied: "%s". \nTips: This warning message is only for prompting, it will not affect running of QDX framework.',
                 e,
             )
         pycurl = None

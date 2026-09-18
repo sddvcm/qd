@@ -19,7 +19,7 @@ from libs import mcrypto as crypto
 from libs.fetcher import Fetcher
 from libs.log import Log
 
-logger_db_converter = Log("QD.DB.Converter").getlogger()
+logger_db_converter = Log("QDX.DB.Converter").getlogger()
 
 
 class DBconverter:

@@ -19,7 +19,7 @@ from web.app import Application
 
 if __name__ == "__main__":
     # init logging
-    logger_web = Log('QD.Web').getlogger()
+    logger_web = Log('QDX.Web').getlogger()
 
     if not config.debug:
         channel = logging.StreamHandler(sys.stderr)

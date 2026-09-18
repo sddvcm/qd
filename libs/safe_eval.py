@@ -141,7 +141,7 @@ _SAFE_OPCODES = _EXPR_OPCODES.union(to_opcodes([
 
 ])) - _BLACKLIST
 
-_logger = Log('QD.Http.Fetcher').getlogger()
+_logger = Log('QDX.Http.Fetcher').getlogger()
 
 '''
 class RunnableProcessing(multiprocessing.Process):

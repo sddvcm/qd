@@ -19,7 +19,7 @@ from db import DB
 from libs import fetcher, utils
 from libs.log import Log
 
-logger_web_handler = Log('QD.Web.Handler').getlogger()
+logger_web_handler = Log('QDX.Web.Handler').getlogger()
 
 __ALL__ = ['HTTPError', 'BaseHandler', 'BaseWebSocket', 'BaseUIModule', 'logger_Web_Handler', ]
 

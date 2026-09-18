@@ -23,7 +23,7 @@ from libs.funcs import Cal, Pusher
 from libs.log import Log
 from libs.parse_url import parse_url
 
-logger_worker = Log('QD.Worker').getlogger()
+logger_worker = Log('QDX.Worker').getlogger()
 
 
 class BaseWorker:
