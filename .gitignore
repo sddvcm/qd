@@ -207,3 +207,8 @@ req-nosql.txt
 req-fnos.txt
 dl.log
 dl2.log
+
+# 飞牛 FPK 的 manifest 文件必须入库
+# 注意: 上面的 MANIFEST 规则(Python 打包产物)在大小写不敏感的文件系统上
+# 会连带忽略这个文件, 必须显式排除, 否则他人 clone 后无法构建。
+!deploy/fnos/qdx/manifest

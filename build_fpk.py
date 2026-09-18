@@ -47,6 +47,8 @@ SKIP_DIRS = {
     ".git", "__pycache__", "node_modules", ".github",
     "wheels", "templates",  # 这两个由构建流程单独生成，不参与源码同步
     "tools",                # fnpack 等构建工具
+    "templates-snapshot",   # 模板快照源目录，复制到 app/templates 而非整体同步
+    "wheels-tmp",           # 依赖下载临时目录
 }
 SKIP_PATHS = {
     "deploy/fnos/qdx",      # FPK 项目目录，本身不是应用内容
@@ -198,32 +200,60 @@ def clean_stale_app():
 def generate_icons():
     """从项目源图标生成 FPK 所需的各尺寸图标。
 
-    避免手工维护多份图片，保证图标始终与项目一致。
+    优先用 Pillow 从源图缩放；Pillow 不可用或源图缺失时，退回复制仓库中
+    已提交的 ICON.PNG（64）与 ICON_256.PNG（256），保证打包不因缺图标而失败。
     """
-    src = os.path.join(ROOT, "web", "static", "img", "icon.png")
-    if not os.path.isfile(src):
-        log("警告: 未找到源图标 web/static/img/icon.png，跳过图标生成")
-        return False
-
-    try:
-        from PIL import Image
-    except ImportError:
-        log("警告: 未安装 Pillow，跳过图标生成（使用已有图标）")
-        return False
-
-    im = Image.open(src).convert("RGBA")
-
     targets = [
         (os.path.join(FPK_DIR, "ICON.PNG"), 64),
         (os.path.join(FPK_DIR, "ICON_256.PNG"), 256),
         (os.path.join(FPK_APP, "ui", "images", "icon_64.png"), 64),
         (os.path.join(FPK_APP, "ui", "images", "icon_256.png"), 256),
     ]
-    for path, size in targets:
+    for path, _ in targets:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        im.resize((size, size), Image.LANCZOS).save(path, "PNG")
 
-    log(f"已生成 {len(targets)} 个图标（源图 {im.size[0]}x{im.size[1]}）")
+    src = os.path.join(ROOT, "web", "static", "img", "icon.png")
+
+    try:
+        from PIL import Image
+    except ImportError:
+        log("未安装 Pillow，改用仓库中已提交的图标")
+        return _fallback_icons(targets)
+
+    if not os.path.isfile(src):
+        log(f"未找到源图标 {src}，改用仓库中已提交的图标")
+        return _fallback_icons(targets)
+
+    try:
+        im = Image.open(src).convert("RGBA")
+        for path, size in targets:
+            im.resize((size, size), Image.LANCZOS).save(path, "PNG")
+        log(f"已生成 {len(targets)} 个图标（源图 {im.size[0]}x{im.size[1]}）")
+        return True
+    except Exception as e:
+        log(f"图标生成失败（{type(e).__name__}: {e}），改用已提交的图标")
+        return _fallback_icons(targets)
+
+
+def _fallback_icons(targets):
+    """从仓库中已提交的图标文件复制，作为 Pillow 不可用时的兜底。"""
+    src64 = os.path.join(FPK_DIR, "ICON.PNG")
+    src256 = os.path.join(FPK_DIR, "ICON_256.PNG")
+
+    for path, size in targets:
+        origin = src256 if size >= 256 else src64
+        if os.path.abspath(path) == os.path.abspath(origin):
+            continue
+        if not os.path.isfile(origin):
+            log(f"  兜底失败: 缺少 {origin}")
+            return False
+        try:
+            shutil.copy2(origin, path)
+        except Exception as e:
+            log(f"  复制图标失败: {e}")
+            return False
+
+    log("已用兜底方式准备图标")
     return True
 
 
@@ -329,7 +359,13 @@ def sync_source():
 
 
 def ensure_templates():
-    """确保内置模板快照存在。"""
+    """确保内置模板快照存在。
+
+    按以下顺序查找快照来源：
+      1. app/templates/ 已存在 → 直接用
+      2. 仓库根目录的 templates-snapshot/（CI 会 clone 到这里）
+      3. 仓库上级目录的 templates-snapshot/（本地开发的常见布局）
+    """
     hist = os.path.join(FPK_TEMPLATES, "tpls_history.json")
     if os.path.isfile(hist):
         size = os.path.getsize(hist)
@@ -337,21 +373,35 @@ def ensure_templates():
         log(f"模板快照已存在: {size / 1024 / 1024:.2f}MB, {har} 个 .har")
         return True
 
-    log("模板快照缺失，尝试从上游拉取")
-    snapshot_src = os.path.join(ROOT, "..", "templates-snapshot")
-    if os.path.isdir(snapshot_src) and os.path.isfile(os.path.join(snapshot_src, "tpls_history.json")):
-        os.makedirs(FPK_TEMPLATES, exist_ok=True)
-        for f in os.listdir(snapshot_src):
-            if f.startswith("."):
-                continue
-            sp = os.path.join(snapshot_src, f)
-            if os.path.isfile(sp):
-                shutil.copy2(sp, os.path.join(FPK_TEMPLATES, f))
-        log("已从本地快照复制模板")
-        return True
+    candidates = [
+        os.path.join(ROOT, "templates-snapshot"),                          # CI 与本地仓库内
+        os.path.abspath(os.path.join(ROOT, "..", "templates-snapshot")),   # 本地仓库上级
+    ]
+
+    for snapshot_src in candidates:
+        if os.path.isdir(snapshot_src) and os.path.isfile(
+            os.path.join(snapshot_src, "tpls_history.json")
+        ):
+            log(f"从快照目录复制模板: {snapshot_src}")
+            os.makedirs(FPK_TEMPLATES, exist_ok=True)
+            n = 0
+            for r, dirs, files in os.walk(snapshot_src):
+                dirs[:] = [d for d in dirs if d not in {".git", ".github"}]
+                for fn in files:
+                    if fn.startswith("."):
+                        continue
+                    sp = os.path.join(r, fn)
+                    rel = os.path.relpath(sp, snapshot_src)
+                    dp = os.path.join(FPK_TEMPLATES, rel)
+                    os.makedirs(os.path.dirname(dp), exist_ok=True)
+                    shutil.copy2(sp, dp)
+                    n += 1
+            log(f"已复制 {n} 个模板文件")
+            return True
 
     log("警告: 未找到模板快照，FPK 将不包含内置模板")
-    log(f"  请手动把模板库克隆到 {snapshot_src}")
+    for c in candidates:
+        log(f"  已尝试: {c}")
     return False
 
 

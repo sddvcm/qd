@@ -14,19 +14,19 @@ fail() {
     exit 1
 }
 
-# 检查存储空间是否可写
-if [ -z "${TRIM_APPDEST_VOL:-}" ]; then
-    fail "无法获取应用安装的存储空间路径，安装终止。"
+# 存储空间检查
+# 注意: 不要对 TRIM_APPDEST_VOL 的卷根目录(如 /vol1)做写入测试。
+# 卷根目录由系统管理, 安装进程没有写权限也不需要写权限;
+# 对它 touch 必然失败, 会把所有安装都误判为"存储空间不可写"。
+# 真正需要写的是 fnOS 预建好的应用数据目录 TRIM_PKGVAR。
+if [ -n "${TRIM_PKGVAR:-}" ] && [ -d "${TRIM_PKGVAR}" ]; then
+    if ! touch "${TRIM_PKGVAR}/.qdx_write_test" 2>/dev/null; then
+        fail "应用数据目录不可写: ${TRIM_PKGVAR}，请检查存储空间状态。"
+    fi
+    rm -f "${TRIM_PKGVAR}/.qdx_write_test" 2>/dev/null
 fi
-
-if [ ! -d "${TRIM_APPDEST_VOL}" ]; then
-    fail "存储空间路径不存在: ${TRIM_APPDEST_VOL}"
-fi
-
-if ! touch "${TRIM_APPDEST_VOL}/.qdx_write_test" 2>/dev/null; then
-    fail "存储空间不可写，请检查权限: ${TRIM_APPDEST_VOL}"
-fi
-rm -f "${TRIM_APPDEST_VOL}/.qdx_write_test" 2>/dev/null
+# TRIM_PKGVAR 不存在时不在此报错 —— 目录由 fnOS 在安装流程中创建,
+# 缺失导致的失败会在 install_callback 中以更明确的上下文暴露。
 
 # 检查 Python 3 是否可用（fnOS 自带）
 PYTHON_BIN=""

@@ -1,0 +1,23 @@
+appname               = qdx
+version               = 1.0.0
+display_name          = QDX 签到框架
+desc                  = QDX —— HTTP 请求定时任务自动执行框架（基于 QD 二次开发）。内置 388 个公共模板，支持导入导出订阅源，支持程序内一键更新，无需重装。
+platform              = all
+source                = thirdparty
+
+maintainer            = sddvcm
+maintainer_url        = https://github.com/sddvcm
+
+os_min_version        = 0.9.0
+
+desktop_uidir         = ui
+desktop_applaunchname = qdx.Application
+
+ctl_stop              = true
+service_port          = 8923
+checkport             = true
+
+install_type          =
+disable_authorization_path = false
+
+changelog             = 首个飞牛 FPK 版本。内置 388 个公共模板快照，支持订阅源导入导出，支持从 GitHub Releases 一键更新。
