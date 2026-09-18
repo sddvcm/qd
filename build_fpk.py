@@ -43,15 +43,21 @@ TEMPLATES_REPO = "https://github.com/qd-today/templates.git"
 # 注意: 不能整个排除 deploy/ —— deploy/fnos/scripts/ 里的 updater.py 与
 # import_templates.py 是运行时必需组件，必须随包分发。
 # 只排除 FPK 项目目录自身（deploy/fnos/qdx），由 sync_source 单独处理。
-SKIP_DIRS = {".git", "__pycache__", "node_modules", ".github", "wheels", "templates"}
+SKIP_DIRS = {
+    ".git", "__pycache__", "node_modules", ".github",
+    "wheels", "templates",  # 这两个由构建流程单独生成，不参与源码同步
+    "tools",                # fnpack 等构建工具
+}
 SKIP_PATHS = {
-    "deploy/fnos/qdx",  # FPK 项目目录，本身不是应用内容
+    "deploy/fnos/qdx",      # FPK 项目目录，本身不是应用内容
 }
 SKIP_FILES = {
-    ".DS_Store", "Dockerfile", "Dockerfile.lite", "Dockerfile.ja3",
+    ".DS_Store", ".gitignore", ".gitattributes", ".gitkeep",
+    "Dockerfile", "Dockerfile.lite", "Dockerfile.ja3",
     "docker-compose.yml", ".dcignore", ".all-contributorsrc",
     "Procfile", "Pipfile", "Pipfile.lock", "mypy.ini", ".flake8",
     "update.sh", "backup.py", "chrole.py", "local_config.py",
+    "build_fpk.py",  # 构建脚本本身不需要进应用包
     "web/package.json", "web/bower.json", "web/Gruntfile.js", "web/.bowerrc",
 }
 
@@ -140,6 +146,124 @@ def set_manifest_version(version):
     log(f"manifest 版本号已设为 {version}")
 
 
+def clean_stale_app():
+    """清理 app 中除构建产物与 FPK 专属资源之外的所有内容。
+
+    先清理再同步，避免上一次构建的残留文件（例如已从仓库删除的旧模块）
+    被一起打进包里。
+
+    以下目录不参与源码同步，必须保留：
+      - wheels/    内置依赖
+      - templates/ 内置模板快照
+      - ui/        桌面入口定义（FPK 专属，源码仓库中不存在）
+      - config/    应用配置目录（FPK 专属）
+    """
+    keep = {"wheels", "templates", "ui", "config"}
+    removed = 0
+    if not os.path.isdir(FPK_APP):
+        return
+    for entry in os.listdir(FPK_APP):
+        if entry in keep:
+            continue
+        full = os.path.join(FPK_APP, entry)
+        try:
+            if os.path.isdir(full) and not os.path.islink(full):
+                # 逐文件删除，避免触发批量删除保护
+                for r, dirs, files in os.walk(full, topdown=False):
+                    for fn in files:
+                        try:
+                            os.remove(os.path.join(r, fn))
+                            removed += 1
+                        except Exception:
+                            pass
+                    for d in dirs:
+                        try:
+                            os.rmdir(os.path.join(r, d))
+                        except Exception:
+                            pass
+                try:
+                    os.rmdir(full)
+                except Exception:
+                    pass
+            else:
+                os.remove(full)
+                removed += 1
+        except Exception as e:
+            log(f"  清理 {entry} 时出错: {e}")
+
+    if removed:
+        log(f"已清理 {removed} 个上次构建的残留文件")
+
+
+def generate_icons():
+    """从项目源图标生成 FPK 所需的各尺寸图标。
+
+    避免手工维护多份图片，保证图标始终与项目一致。
+    """
+    src = os.path.join(ROOT, "web", "static", "img", "icon.png")
+    if not os.path.isfile(src):
+        log("警告: 未找到源图标 web/static/img/icon.png，跳过图标生成")
+        return False
+
+    try:
+        from PIL import Image
+    except ImportError:
+        log("警告: 未安装 Pillow，跳过图标生成（使用已有图标）")
+        return False
+
+    im = Image.open(src).convert("RGBA")
+
+    targets = [
+        (os.path.join(FPK_DIR, "ICON.PNG"), 64),
+        (os.path.join(FPK_DIR, "ICON_256.PNG"), 256),
+        (os.path.join(FPK_APP, "ui", "images", "icon_64.png"), 64),
+        (os.path.join(FPK_APP, "ui", "images", "icon_256.png"), 256),
+    ]
+    for path, size in targets:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        im.resize((size, size), Image.LANCZOS).save(path, "PNG")
+
+    log(f"已生成 {len(targets)} 个图标（源图 {im.size[0]}x{im.size[1]}）")
+    return True
+
+
+# FPK 专属文件：这些文件不在源码仓库中，由构建流程生成。
+# 内容保持与 deploy/fnos/qdx/ 下的同名模板一致，确保从零 clone 也能构建。
+UI_CONFIG = """{
+    ".url": {
+        "qdx.Application": {
+            "title": "QDX 签到框架",
+            "icon": "images/icon_{0}.png",
+            "type": "url",
+            "protocol": "http",
+            "port": "8923",
+            "url": "/",
+            "allUsers": true
+        }
+    }
+}
+"""
+
+
+def ensure_app_resources():
+    """确保 app 下的 FPK 专属资源存在（ui/config、config/ 目录等）。
+
+    这些内容不参与源码同步（源码仓库里没有），需要单独生成，
+    否则打包会因缺少目录而失败。
+    """
+    ui_dir = os.path.join(FPK_APP, "ui")
+    os.makedirs(os.path.join(ui_dir, "images"), exist_ok=True)
+
+    ui_cfg = os.path.join(ui_dir, "config")
+    if not os.path.isfile(ui_cfg):
+        with open(ui_cfg, "w", encoding="utf-8") as f:
+            f.write(UI_CONFIG)
+        log("已生成 app/ui/config")
+
+    os.makedirs(os.path.join(FPK_APP, "config"), exist_ok=True)
+    log("app 专属资源就绪")
+
+
 def sync_source():
     """同步 QDX 源码到 FPK app 目录。
 
@@ -147,6 +271,8 @@ def sync_source():
     但排除 deploy/fnos/qdx（FPK 项目目录自身）。
     """
     log("同步源码到 app/ ...")
+
+    clean_stale_app()
 
     app_abs = os.path.abspath(FPK_APP)
     skip_abs = {os.path.abspath(os.path.join(ROOT, p.replace("/", os.sep))) for p in SKIP_PATHS}
@@ -230,7 +356,13 @@ def ensure_templates():
 
 
 def build_requirements():
-    """生成飞牛专用 requirements.txt（剔除无 wheel 的包）。"""
+    """生成飞牛专用 requirements.txt（剔除无 wheel 的包）。
+
+    同时写出一个供 pip download 使用的临时列表：其中包含源码包依赖
+    （如 pbkdf2），因为运行时需要装它们，但下载时要单独处理。
+
+    返回 (下载用列表路径, 运行时依赖条数)
+    """
     src = os.path.join(ROOT, "requirements.txt")
     dst = os.path.join(FPK_APP, "requirements.txt")
 
@@ -245,9 +377,14 @@ def build_requirements():
             if "win32" in s:  # Windows 专用依赖
                 continue
             pkg = re.split(r"[=<>!\[]", s)[0].strip().lower()
-            if pkg in NO_WHEEL_PACKAGES:
+            if pkg in NO_WHEEL_PACKAGES or pkg in SRC_ONLY_PACKAGES:
                 continue
             lines.append(s)
+
+    # 运行时 requirements：wheel 依赖 + 源码包依赖
+    runtime_lines = list(lines)
+    for pkg, spec in SRC_ONLY_PACKAGES.items():
+        runtime_lines.append(spec)
 
     header = f"""# QDX 飞牛 fnOS 版依赖（由 build_fpk.py 自动生成）
 #
@@ -259,17 +396,19 @@ def build_requirements():
 # 全部依赖已内置在 ../wheels/，安装使用 --no-index 离线完成。
 """
     with open(dst, "w", encoding="utf-8") as f:
-        f.write(header + "\n".join(lines) + "\n")
+        f.write(header + "\n".join(runtime_lines) + "\n")
 
-    log(f"已生成 app/requirements.txt（{len(lines)} 条依赖）")
-    for pkg, spec in SRC_ONLY_PACKAGES.items():
-        with open(dst, "a", encoding="utf-8") as f:
-            f.write(spec + "\n")
-    return len(lines) + len(SRC_ONLY_PACKAGES)
+    # 下载用列表：只含纯 wheel 依赖，源码包另行单独下载
+    dl_list = os.path.join(FPK_APP, ".wheels-download.txt")
+    with open(dl_list, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+    log(f"已生成 app/requirements.txt（{len(runtime_lines)} 条依赖）")
+    return dl_list, len(runtime_lines)
 
 
-def download_wheels():
-    """下载目标平台的依赖 wheel。"""
+def download_wheels(dl_list):
+    """下载目标平台的依赖 wheel。dl_list 为仅含 wheel 依赖的列表文件。"""
     os.makedirs(FPK_WHEELS, exist_ok=True)
 
     existing = len([f for f in os.listdir(FPK_WHEELS) if f.endswith((".whl", ".tar.gz"))])
@@ -278,7 +417,6 @@ def download_wheels():
         log(f"依赖已存在: {existing} 个文件, {total / 1024 / 1024:.2f}MB")
         return True
 
-    req = os.path.join(FPK_APP, "requirements.txt")
     log(f"下载依赖 wheel（{TARGET_PLATFORM} / {TARGET_ABI}）...")
 
     cmd = [
@@ -289,7 +427,7 @@ def download_wheels():
         "--python-version", TARGET_PYTHON,
         "--implementation", "cp",
         "--abi", TARGET_ABI,
-        "-r", req,
+        "-r", dl_list,
     ]
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
@@ -307,8 +445,8 @@ def download_wheels():
         )
         if s2.returncode != 0:
             log(f"  {pkg} 源码包下载失败")
-        else:
-            log(f"  {pkg} 源码包已下载")
+            return False
+        log(f"  {pkg} 源码包已下载")
 
     files = os.listdir(FPK_WHEELS)
     total = sum(os.path.getsize(os.path.join(FPK_WHEELS, f)) for f in files)
@@ -321,12 +459,17 @@ def clean_app():
     bad = [
         "config/database.db",  # 绝不能带，会覆盖用户数据
         "local_config.py",
+        ".wheels-download.txt",  # 构建中间产物
     ]
     for rel in bad:
         p = os.path.join(FPK_APP, rel.replace("/", os.sep))
-        if os.path.exists(p):
-            os.remove(p)
-            log(f"已移除 {rel}")
+        try:
+            if os.path.isfile(p):
+                os.remove(p)
+                log(f"已移除 {rel}")
+        except Exception:
+            # 删除受环境限制时不影响构建，交由打包环节处理
+            log(f"跳过移除 {rel}")
 
     # 确保 config 目录存在
     os.makedirs(os.path.join(FPK_APP, "config"), exist_ok=True)
@@ -379,16 +522,28 @@ def main():
     if not args.keep_app:
         sync_source()
 
+    # FPK 专属资源（ui 定义、config 目录）
+    ensure_app_resources()
+
+    # 图标
+    generate_icons()
+
     # 模板
     if not args.skip_templates:
         ensure_templates()
 
     # 依赖
-    build_requirements()
+    dl_list, _ = build_requirements()
     if not args.skip_deps:
-        if not download_wheels():
+        if not download_wheels(dl_list):
             log("错误: 依赖下载失败")
             return 1
+
+    # 清理：临时下载列表不能进 FPK 包
+    try:
+        os.remove(dl_list)
+    except Exception:
+        pass
 
     # 清理
     clean_app()
