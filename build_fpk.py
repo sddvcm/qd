@@ -22,6 +22,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.request
 
 # 仓库根目录
@@ -550,6 +551,49 @@ def build_fpk(fnpack):
     return fpk
 
 
+def prepare_dist_dir():
+    """准备 dist 产物目录。
+
+    在可能的情况下把 dist 建为指向源码树外的符号链接（CI 上）。
+    原因: CI 的源码包归档步骤会对整个仓库目录做 tar, 若 dist 是源码树内
+    的真实目录, tar 会把自己正在写入的 dist/*.tar.gz 也读进去并报
+    "file changed as we read it" 而失败。dist 为目录符号链接时, tar
+    只记录链接本身, 不进入目录, 问题消除; 后续 cp/上传步骤照常通过
+    链接读写。
+    Windows 本地环境创建符号链接通常无权限, 此时退回普通目录,
+    不影响本地构建。
+    """
+    dist = os.path.join(ROOT, "dist")
+    if os.path.islink(dist):
+        return
+    if os.path.isdir(dist):
+        # 已存在真实目录: 清空即可（内含上次构建产物）
+        for entry in os.listdir(dist):
+            full = os.path.join(dist, entry)
+            try:
+                if os.path.isdir(full):
+                    shutil.rmtree(full, ignore_errors=True)
+                else:
+                    os.remove(full)
+            except Exception:
+                pass
+        return
+
+    target = os.path.join(tempfile.gettempdir(), "qdx-dist")
+    try:
+        os.makedirs(target, exist_ok=True)
+        for entry in os.listdir(target):
+            try:
+                os.remove(os.path.join(target, entry))
+            except Exception:
+                pass
+        os.symlink(target, dist)
+        log(f"dist -> {target} (符号链接, 归档时不会自包含)")
+    except Exception as e:
+        os.makedirs(dist, exist_ok=True)
+        log(f"dist 使用普通目录（{type(e).__name__}）")
+
+
 def main():
     ap = argparse.ArgumentParser(description="构建 QDX 飞牛 FPK 安装包")
     ap.add_argument("--skip-deps", action="store_true", help="跳过依赖下载")
@@ -604,6 +648,9 @@ def main():
     if not fpk:
         log("错误: 打包失败")
         return 1
+
+    # 准备 dist 产物目录（CI 上为源码树外符号链接, 详见函数注释）
+    prepare_dist_dir()
 
     # 输出校验信息
     size = os.path.getsize(fpk)
