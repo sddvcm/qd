@@ -7,7 +7,7 @@
     "binux <roy@binux.me>)"
   ],
   "description": "QD",
-  "homepage": "https://github.com/qd-today/qd",
+  "homepage": "https://github.com/sddvcm/qd",
   "private": true,
   "ignore": [
     "**/.*",
@@ -45,7 +45,7 @@
   "license": "MIT",
   "keywords": [
     "QD",
-    "QD-TODAY",
+    "sddvcm",
     "har",
     "http",
     "web"

@@ -14,18 +14,18 @@ docker cp database.db container_name:/usr/src/app/config/
 ## 如何在 Docker 中配置邮箱服务器?
 
 ```sh
-docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --env MAIL_SMTP=STMP服务器 --env MAIL_PORT=邮箱服务器端口 --env MAIL_USER=用户名 --env MAIL_PASSWORD=密码  --env DOMAIN=域名 qdtoday/qd
+docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --env MAIL_SMTP=STMP服务器 --env MAIL_PORT=邮箱服务器端口 --env MAIL_USER=用户名 --env MAIL_PASSWORD=密码  --env DOMAIN=域名 ghcr.io/sddvcm/qd
 ```
 
 ## 如何在 Docker 中使用 MySQL?
 
 ```sh
-docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --ENV DB_TYPE=mysql --ENV JAWSDB_MARIA_URL=mysql://用户名:密码@hostname:port/数据库名 qdtoday/qd
+docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --ENV DB_TYPE=mysql --ENV JAWSDB_MARIA_URL=mysql://用户名:密码@hostname:port/数据库名 ghcr.io/sddvcm/qd
 ```
 
 ## 如何自己搭建 Docker 镜像?
 
-请参考此镜像的构建文件 [Dockerfile](https://github.com/qd-today/qd/blob/master/Dockerfile)。
+请参考此镜像的构建文件 [Dockerfile](https://github.com/sddvcm/qd/blob/master/Dockerfile)。
 
 ## 如何查看当前框架支持的 API 和 Jinja2 模板变量?
 
@@ -33,7 +33,7 @@ docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --ENV
 
 ## 如何提交 bug 问题?
 
-请在遇到问题后开启 `Debug` 模式，然后将详细的错误日志提交至 [Issue](https://github.com/qd-today/qd/issues)。
+请在遇到问题后开启 `Debug` 模式，然后将详细的错误日志提交至 [Issue](https://github.com/sddvcm/qd/issues)。
 
 ## QD 模板一般需要哪些请求?
 
@@ -49,7 +49,7 @@ docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --ENV
 
 为了帮助用户发起请求，终究需要记录用户名和密码。这只能靠服务器维护人员的自律来保证后端数据的安全。但在框架设计中，每个用户在存储时都使用安全密钥进行加密。使用密钥对用户数据进行加密，可以保证仅获取数据库就无法解密用户数据。（加密的用户数据包括用户上传的模板、用户为任务设置的变量等）
 
-如果还是不放心，可以自己搭建 QD 框架，下载模板在自己的服务器上运行。
+如果还是不放心，可以自己搭建 QDX，下载模板在自己的服务器上运行。
 
 ## 提示错误信息 `PermissionError: [Errno 1] Operation not permitted`?
 
@@ -87,7 +87,7 @@ QD 使用 `redis` 作为限流工具，如果没有安装 `redis` 服务，框�
 
 然而，`redis` 在框架中并不是必须的，如果你不需要使用 `限流` 功能，可以忽略该警告信息。
 
-> 建议使用 `Docker compose` 部署 QD 框架, Docker compose 配置已默认安装 redis 容器。
+> 建议使用 `Docker compose` 部署 QDX, Docker compose 配置已默认安装 redis 容器。
 
 ## 提示警告信息: `Import PyCurl module falied`
 
@@ -101,7 +101,7 @@ QD 使用 `pycurl` 模块来发送 HTTP Proxy 请求。如果没有安装 `pycur
 
 > `pycurl` 模块在 Windows 系统上安装比较麻烦，需要安装 `libcurl` 库，具体安装方法请参考 [pycurl 官方文档](http://pycurl.io/docs/latest/install.html)。
 >
-> 建议使用容器或 linux 系统部署 QD 框架, Docker 容器已预装 Curl 环境, 默认安装 pycurl 模组。
+> 建议使用容器或 linux 系统部署 QDX, Docker 容器已预装 Curl 环境, 默认安装 pycurl 模组。
 
 ## 如何注册推送方式
 
@@ -111,7 +111,7 @@ QD 使用 `pycurl` 模块来发送 HTTP Proxy 请求。如果没有安装 `pycur
 
 ## 公共模板更新页面提示错误代码为 undefined
 
-- [issue#423](https://github.com/qd-today/qd/issues/423)
+- [issue#423](https://github.com/sddvcm/qd/issues/423)
 
 > 公共模板更新页面提示错误代码为 undefined, 或者控制台显示 WebSocket 连接 failed 但不显示错误原因
 

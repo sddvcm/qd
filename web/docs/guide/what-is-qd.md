@@ -26,5 +26,5 @@ Please refer: [Update](update)
 
 ## Discussion
 
-- Github: [Issue](https://github.com/qd-today/qd/issues)
-- Github: [Discussion](https://github.com/qd-today/qd/discussions)
+- Github: [Issue](https://github.com/sddvcm/qd/issues)
+- Github: [Discussion](https://github.com/sddvcm/qd/discussions)

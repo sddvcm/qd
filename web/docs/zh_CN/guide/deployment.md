@@ -8,7 +8,7 @@ Docker 容器部署是部署 QD 的最简单方式。
 
 ### 容器
 
-**DockerHub 网址**：[https://hub.docker.com/r/qdtoday/qd](https://hub.docker.com/r/qdtoday/qd)
+**DockerHub 网址**：[https://hub.docker.com/r/ghcr.io/sddvcm/qd](https://hub.docker.com/r/ghcr.io/sddvcm/qd)
 
 > Tag 含义:
 >
@@ -35,7 +35,7 @@ docker-compose up -d
 
 > 配置描述见下文 [Configuration](#配置环境变量)
 >
-> 如不需要`OCR功能`或者`硬盘空间不大于600M`, 请使用 **`qdtoday/qd:lite-latest`** 镜像, **该镜像仅去除了OCR相关功能, 其他与主线版本保持一致**。
+> 如不需要`OCR功能`或者`硬盘空间不大于600M`, 请使用 **`ghcr.io/sddvcm/qd:lite-latest`** 镜像, **该镜像仅去除了OCR相关功能, 其他与主线版本保持一致**。
 >
 > **请勿使用 阿里云镜像源 拉取 Docker 容器, 会导致无法拉取最新镜像**
 
@@ -45,7 +45,7 @@ docker-compose up -d
 
    ![点击安装](../../public/panel1.png)
 
-   > 不同 1Panel 版本显示 QD 框架名称可能不同, 但均为 `QD` 图标.
+   > 不同 1Panel 版本显示 QDX名称可能不同, 但均为 `QD` 图标.
 
 2.2. 配置相关设置
 
@@ -55,26 +55,26 @@ docker-compose up -d
    >
    > 配置描述见下文 [Configuration](#配置环境变量)
    >
-   > 如不需要`OCR功能`或者`硬盘空间不大于600M`, 请使用 **`qdtoday/qd:lite-latest`** 镜像, **该镜像仅去除了OCR相关功能, 其他与主线版本保持一致**。
+   > 如不需要`OCR功能`或者`硬盘空间不大于600M`, 请使用 **`ghcr.io/sddvcm/qd:lite-latest`** 镜像, **该镜像仅去除了OCR相关功能, 其他与主线版本保持一致**。
 
 2.3. 点击 `确认` 即可通过 1Panel 安装 QD
 
 #### 3. Docker 运行
 
 ``` sh
-docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config qdtoday/qd
+docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config ghcr.io/sddvcm/qd
 ```
 
 容器内部无法连通外部网络时尝试该命令:
 
 ``` sh
 # 使用 Host 网络模式创建容器, 端口号: 8923
-docker run -d --name qd --env PORT=8923 --net=host -v $(pwd)/qd/config:/usr/src/app/config qdtoday/qd
+docker run -d --name qd --env PORT=8923 --net=host -v $(pwd)/qd/config:/usr/src/app/config ghcr.io/sddvcm/qd
 ```
 
 > 注意: 使用该命令创建容器后, 请将模板里 `http://localhost/` 形式的 api 请求, 手动改成 `api://` 或 `http://localhost:8923/` 后, 才能正常完成相关API请求。
 >
-> **请勿同时运行新旧版 QD 框架, 或将不同运行中的 QD 容器数据库映射为同一文件。**
+> **请勿同时运行新旧版 QDX, 或将不同运行中的 QD 容器数据库映射为同一文件。**
 
 ## 源码部署
 
@@ -175,8 +175,8 @@ ALLOW_RETRY|否|True|在Pycurl环境下部分请求可能导致Request错误时,
 DNS_SERVER|否|""|通过Curl使用指定DNS进行解析(仅支持Pycurl环境), <br>如 8.8.8.8
 CURL_ENCODING|否|True|是否允许使用Curl进行Encoding操作
 CURL_CONTENT_LENGTH|否|True|是否允许Curl使用Headers中自定义Content-Length请求
-NOT_RETRY_CODE|否|[详见配置](https://github.com/qd-today/qd/blob/master/config.py)...|[详见配置](https://github.com/qd-today/qd/blob/master/config.py)...
-EMPTY_RETRY|否|True|[详见配置](https://github.com/qd-today/qd/blob/master/config.py)...
+NOT_RETRY_CODE|否|[详见配置](https://github.com/sddvcm/qd/blob/master/config.py)...|[详见配置](https://github.com/sddvcm/qd/blob/master/config.py)...
+EMPTY_RETRY|否|True|[详见配置](https://github.com/sddvcm/qd/blob/master/config.py)...
 USER0ISADMIN|否|True|第一个注册用户为管理员，False关闭
 NOTEPAD_LIMIT|否|20|单个用户拥有记事本最大数量, 默认为 20
 EXTRA_ONNX_NAME|否|""|config目录下自定义ONNX文件名<br>(不填 ".onnx" 后缀)<br>多个onnx文件名用"\|"分隔
@@ -186,6 +186,6 @@ WS_PING_TIMEOUT|No|30|WebSocket ping超时时间, 单位为秒, 默认为 30s
 WS_MAX_MESSAGE_SIZE|No|10485760|WebSocket 单次接收最大消息大小, 默认为 10MB
 WS_MAX_QUEUE_SIZE|No|100|WebSocket 最大消息队列大小, 默认为 100
 WS_MAX_CONNECTIONS_SUBSCRIBE|No|30|WebSocket 公共模板更新页面最大连接数, 默认为 30
-SUBSCRIBE_ACCELERATE_URL|No|jsdelivr_cdn|订阅加速方式或地址, 用于加速公共模板更新, 仅适用于 GitHub. <br>[详见配置](https://github.com/qd-today/qd/blob/master/config.py)...
+SUBSCRIBE_ACCELERATE_URL|No|jsdelivr_cdn|订阅加速方式或地址, 用于加速公共模板更新, 仅适用于 GitHub. <br>[详见配置](https://github.com/sddvcm/qd/blob/master/config.py)...
 
-> 详细信息请查阅[config.py](https://github.com/qd-today/qd/blob/master/config.py)
+> 详细信息请查阅[config.py](https://github.com/sddvcm/qd/blob/master/config.py)

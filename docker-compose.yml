@@ -1,11 +1,11 @@
 version: "3"
 
 services:
-  qd:
-    image: qdtoday/qd:latest
-    # image: qdtoday/qd:lite-latest # 精简版
-    # image: qdtoday/qd:dev # 开发版
-    container_name: qd
+  qdx:
+    image: ghcr.io/sddvcm/qd:latest
+    # image: ghcr.io/sddvcm/qd:lite-latest # 精简版
+    # image: ghcr.io/sddvcm/qd:dev # 开发版
+    container_name: qdx
     depends_on:
       - redis
     ports:
@@ -65,7 +65,7 @@ services:
       # - NOT_RETRY_CODE=301|302|303|304|305|307|400|401|403|404|405|407|408|409|410|412|415|413|414|500|501|502|503|504|599
       # - EMPTY_RETRY=True
       # - TRACEBACK_PRINT=False
-      # - PUSH_PIC_URL=https://gitee.com/qd-today/qd/raw/master/web/static/img/push_pic.png
+      # - PUSH_PIC_URL=
       # - PUSH_BATCH_SW=True
       # - PUSH_BATCH_DELTA=60
       # - WS_PING_INTERVAL=5

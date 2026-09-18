@@ -15,7 +15,7 @@ hero:
       link: /zh_CN/guide/what-is-qd
     - theme: alt
       text: 在 GitHub 中查看
-      link: https://github.com/qd-today/qd
+      link: https://github.com/sddvcm/qd
 
 features:
   - title: 基于Har

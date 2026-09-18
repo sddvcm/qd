@@ -411,7 +411,7 @@ class Pusher:
                                         "title": title,
                                         "digest": log.replace("\\r\\n", "\n"),
                                         "content": log.replace("\\r\\n", "<br>"),
-                                        "author": "QD框架",
+                                        "author": "QDX",
                                         "content_source_url": config.domain,
                                         "thumb_media_id": media_id
                                      }

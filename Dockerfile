@@ -2,28 +2,22 @@
 FROM a76yyyy/pycurl:latest
 
 # 维护者信息
-LABEL maintainer "a76yyyy <q981331502@163.com>"
-LABEL org.opencontainers.image.source=https://github.com/qd-today/qd
+LABEL maintainer "sddvcm <https://github.com/sddvcm>"
+LABEL org.opencontainers.image.source=https://github.com/sddvcm/qd
 
-ADD ssh/qd_fetch /root/.ssh/id_rsa
-ADD ssh/qd_fetch.pub /root/.ssh/id_rsa.pub
 WORKDIR /usr/src/app
+
+# QDX: 直接使用构建上下文中的本地源码, 不再从任何外部仓库克隆
+COPY . /usr/src/app
 
 # QD && Pip install modules
 RUN sed -i 's/mirrors.ustc.edu.cn/dl-cdn.alpinelinux.org/g' /etc/apk/repositories && \
     sed -i 's/edge/v3.19/g' /etc/apk/repositories && \
     sed -i '/testing/d' /etc/apk/repositories && \
-    apk update && apk add --update --no-cache openssh-client && \
-    chmod 600 /root/.ssh/id_rsa && \
-    ssh-keyscan gitee.com > /root/.ssh/known_hosts && \
-    let num=$RANDOM%100+10 && \
-    sleep $num && \
-    git clone --depth 1 git@gitee.com:qd-today/qd.git /gitclone_tmp && \
-    yes | cp -rf /gitclone_tmp/. /usr/src/app && \
-    rm -rf /gitclone_tmp && \
+    apk update && \
     chmod +x /usr/src/app/update.sh && \
     ln -s /usr/src/app/update.sh /bin/update && \
-    apk add --update --no-cache openssh-client python3 py3-six \
+    apk add --update --no-cache python3 py3-six \
     py3-markupsafe py3-pycryptodome py3-tornado py3-wrapt \
     py3-packaging py3-greenlet py3-urllib3 py3-cryptography \
     py3-aiosignal py3-async-timeout py3-attrs py3-frozenlist \

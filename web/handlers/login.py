@@ -147,7 +147,7 @@ class RegisterHandler(BaseHandler):
 
                     if siteconfig['MustVerifyEmailEn'] == 1:
                         if not config.domain:
-                            await self.render('register.html', email_error='请联系 QD 框架管理员配置框架域名 domain, 以启用邮箱验证功能!', regFlg=reg_flg)
+                            await self.render('register.html', email_error='请联系 QDX管理员配置框架域名 domain, 以启用邮箱验证功能!', regFlg=reg_flg)
                         else:
                             await self.render('register.html', email_error='请验证邮箱后再登陆', regFlg=reg_flg)
                     if config.domain:
@@ -161,7 +161,7 @@ class RegisterHandler(BaseHandler):
                 if must_verify_email_en == 1:
                     if user['email_verified'] != 1:
                         if not config.domain:
-                            await self.render('register.html', email_error='请联系 QD 框架管理员配置框架域名 domain, 以启用邮箱验证功能!', regFlg=reg_flg)
+                            await self.render('register.html', email_error='请联系 QDX管理员配置框架域名 domain, 以启用邮箱验证功能!', regFlg=reg_flg)
                             return
                         await self.render('register.html', email_error='email地址未验证, 邮件已发送, 请验证邮件后登陆')
                         await self.send_mail(user, sql_session=sql_session)
@@ -247,7 +247,7 @@ class PasswordResetHandler(BaseHandler):
 
     async def post(self, code):
         if not config.domain:
-            await self.finish('请联系 QD 框架管理员配置框架域名 domain, 以启用密码重置功能!')
+            await self.finish('请联系 QDX管理员配置框架域名 domain, 以启用密码重置功能!')
             return
         if not code:
             self.evil(+5)

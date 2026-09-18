@@ -1,5 +1,5 @@
 {
-  "name": "qd",
+  "name": "qdx",
   "version": "1.0.0",
   "description": "QD - 一个 HTTP 请求定时任务自动执行框架 base on HAR Editor and Tornado Server",
   "main": "webpack.config.js",
@@ -12,11 +12,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/qd-today/qd.git"
+    "url": "git+https://github.com/sddvcm/qd.git"
   },
   "keywords": [
     "QD",
-    "QD-TODAY",
+    "sddvcm",
     "har",
     "http",
     "web"
@@ -24,9 +24,9 @@
   "author": "a76yyyy",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/qd-today/qd/issues"
+    "url": "https://github.com/sddvcm/qd/issues"
   },
-  "homepage": "https://github.com/qd-today/qd#readme",
+  "homepage": "https://github.com/sddvcm/qd#readme",
   "dependencies": {
     "curl2har": "npm:@a76yyyy/curl-to-har@^0.0.24",
     "qs": "^6.14.0",

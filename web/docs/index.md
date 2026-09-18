@@ -15,7 +15,7 @@ hero:
       link: /guide/what-is-qd
     - theme: alt
       text: View on GitHub
-      link: https://github.com/qd-today/qd
+      link: https://github.com/sddvcm/qd
 
 features:
   - title: Har-based

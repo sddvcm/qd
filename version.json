@@ -1,25 +1,17 @@
 {
     "version": 20250803,
     "Repo": [
-        "https://github.com/qd-today/qd",
-        "https://github.com/a76yyyy/qd",
-        "https://github.com/binux/qiandao"
+        "https://github.com/sddvcm/qd"
     ],
     "Author&Collaborator": [
-        "binux",
-        "a76yyyy",
-        "AragonSnow",
-        "Mark",
-        "PiDan",
-        "acooler15",
-        "billypon",
-        "liubei121212",
-        "gxitm",
-        "戏如人生",
-        "buzhibujuelb",
-        "powersee",
-        "cxk000"
+        "sddvcm"
     ],
+    "BasedOn": {
+        "name": "QD",
+        "url": "https://github.com/qd-today/qd",
+        "license": "MIT",
+        "note": "QDX 基于 QD (MIT) 二次开发, 已与上游脱离关联。上游作者与贡献者名单见 CHANGELOG.md 与 .all-contributorsrc。"
+    },
     "Theme": {
         "version": 20191106,
         "Pidan": "0.1.2",

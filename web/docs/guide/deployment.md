@@ -8,7 +8,7 @@ Docker Container Deployment is the easiest way to deploy QD.
 
 ### Container
 
-**DockerHub URL** : [https://hub.docker.com/r/qdtoday/qd](https://hub.docker.com/r/qdtoday/qd)
+**DockerHub URL** : [https://hub.docker.com/r/ghcr.io/sddvcm/qd](https://hub.docker.com/r/ghcr.io/sddvcm/qd)
 
 > Tag meaning:
 >
@@ -35,7 +35,7 @@ docker-compose up -d
 
 > See [Configuration](#configuration-environment-variables) below for configuration description
 >
-> If you don't need `OCR` or `hard disk space is not larger than 600M`, please use **`qdtoday/qd:lite-latest`** image, **this image only removes OCR related functions, other than the mainline version to keep consistent**.
+> If you don't need `OCR` or `hard disk space is not larger than 600M`, please use **`ghcr.io/sddvcm/qd:lite-latest`** image, **this image only removes OCR related functions, other than the mainline version to keep consistent**.
 >
 > **Please don't use AliCloud image source to pull Docker container, it will not pull the latest image.**
 
@@ -55,21 +55,21 @@ docker-compose up -d
    >
    > See [Configuration](#configuration-environment-variables) below for configuration description
    >
-   > If you don't need `OCR` or `hard disk space is not larger than 600M`, please use **`qdtoday/qd:lite-latest`** image, **this image only removes OCR related functions, other than the mainline version to keep consistent**.
+   > If you don't need `OCR` or `hard disk space is not larger than 600M`, please use **`ghcr.io/sddvcm/qd:lite-latest`** image, **this image only removes OCR related functions, other than the mainline version to keep consistent**.
 
 2.3. Click `Confirm` to install QD via 1Panel
 
 #### 3. Docker Run
 
 ``` sh
-docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config qdtoday/qd
+docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config ghcr.io/sddvcm/qd
 ```
 
 Try this command if you cannot connect to the external network inside the container:
 
 ``` sh
 # Create container using Host network mode, port: 8923
-docker run -d --name qd --env PORT=8923 --net=host -v $(pwd)/qd/config:/usr/src/app/config qdtoday/qd
+docker run -d --name qd --env PORT=8923 --net=host -v $(pwd)/qd/config:/usr/src/app/config ghcr.io/sddvcm/qd
 ```
 
 > Please note that after creating a container with this command, please change the api request of `http://localhost/` form in the template to `api://` or `http://localhost:8923/` manually in order to complete the related API request properly.
@@ -175,8 +175,8 @@ python ./chrole.py your@email.address admin
 |DNS_SERVER|No|""|Use specified DNS for resolution via Curl (only supports Pycurl environment), <br>such as 8.8.8.8|
 |CURL_ENCODING|No|True|Whether to allow to use Curl for Encoding operation|
 |CURL_CONTENT_LENGTH|No|True|Whether to allow Curl to use custom Content-Length request in Headers|
-|NOT_RETRY_CODE|No|[See configuration for details](https://github.com/qd-today/qd/blob/master/config.py)...|[See configuration for details](https://github.com/qd-today/qd/blob/master/config.py)...|
-|EMPTY_RETRY|No|True|[See configuration for details](https://github.com/qd-today/qd/blob/master/config.py)...|
+|NOT_RETRY_CODE|No|[See configuration for details](https://github.com/sddvcm/qd/blob/master/config.py)...|[See configuration for details](https://github.com/sddvcm/qd/blob/master/config.py)...|
+|EMPTY_RETRY|No|True|[See configuration for details](https://github.com/sddvcm/qd/blob/master/config.py)...|
 |USER0ISADMIN|No|True|The first registered user is an administrator, False to close|
 |NOTEPAD_LIMIT|No|20|The maximum number of notepads within the same user, the default is 20|
 |EXTRA_ONNX_NAME|No|""|Customize the ONNX file name in the config directory<br>(do not fill in the ".onnx" suffix)<br>Separate multiple onnx file names with "\|"|
@@ -186,6 +186,6 @@ python ./chrole.py your@email.address admin
 |WS_MAX_MESSAGE_SIZE|No|10485760|WebSocket maximum message size, the default is 10485760 bytes|
 |WS_MAX_QUEUE_SIZE|No|100|WebSocket maximum queue size, the default is 100|
 |WS_MAX_CONNECTIONS_SUBSCRIBE|No|30|WebSocket subscribe page maximum number of connections, the default is 30|
-|SUBSCRIBE_ACCELERATE_URL|No|qd-ph|Subscribe page acceleration URL, the default is qd-ph, <br>[See configuration for details](https://github.com/qd-today/qd/blob/master/config.py)...|
+|SUBSCRIBE_ACCELERATE_URL|No|qd-ph|Subscribe page acceleration URL, the default is qd-ph, <br>[See configuration for details](https://github.com/sddvcm/qd/blob/master/config.py)...|
 
-> For details, please refer to [config.py](https://github.com/qd-today/qd/blob/master/config.py)
+> For details, please refer to [config.py](https://github.com/sddvcm/qd/blob/master/config.py)

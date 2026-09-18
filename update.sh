@@ -11,7 +11,8 @@
 #
 # LICENSE: MIT
 #
-# ORGANIZATION: qd-today (https://github.com/qd-today)
+# ORGANIZATION: sddvcm (https://github.com/sddvcm)
+# MODIFIED: QDX - 已切断与上游 qd-today/qd 的全部关联
 #
 # CREATED: 2021-10-28 20:00:00
 #
@@ -59,7 +60,7 @@ Example:
   2) Use long options:
     $ sh ${__ScriptName} --update
 
-Report issues to https://github.com/qd-today/qd
+Report issues to https://github.com/sddvcm/qd
 
 EOT
 }   # ----------  end of function usage  ----------
@@ -203,7 +204,10 @@ echo_auto_reload() {
 }
 
 update_version() {
-    wget https://gitee.com/qd-today/qd/raw/"${remoteversion}"/requirements.txt -O /usr/src/app/requirements.txt && \
+    # QDX: 依赖文件使用本仓库内容, 不再从外部源拉取
+    if [ -f "${_dir}/requirements.txt" ]; then
+        cp -f "${_dir}/requirements.txt" /usr/src/app/requirements.txt 2>/dev/null || true
+    fi
     if grep -q -E "Alpine|alpine" /etc/issue
     then
         update_in_alpine
@@ -276,7 +280,7 @@ update() {
                 fi
             else
                 echo "'$1' is not correct type of tag"
-                echo "For available version tags, see 'https://gitee.com/qd-today/qd/tags'"
+                echo "For available version tags, see 'https://github.com/sddvcm/qd/tags'"
             fi
         fi
     else

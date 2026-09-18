@@ -14,8 +14,8 @@ from urllib.parse import parse_qs, urlparse
 
 from libs.config_utils import strtobool
 
-# QD 框架常用设置
-debug = bool(strtobool(os.getenv("QD_DEBUG", "False")))  # 是否启用 QD 框架 Debug
+# QDX 常用设置
+debug = bool(strtobool(os.getenv("QD_DEBUG", "False")))  # 是否启用 QDX Debug
 bind = str(
     os.getenv("BIND", "0.0.0.0")
 )  # 框架运行监听地址 ('0.0.0.0' 表示监听所有 IP 地址)
@@ -50,7 +50,7 @@ cookie_days = int(os.getenv("COOKIE_DAY", "5"))  # Cookie 在客户端保留时�
 cookie_secure_mode = bool(
     strtobool(os.getenv("COOKIE_SECURE_MODE", "False"))
 )  # Cookie 是否启用安全模式, 默认为 False,
-# 启用后仅支持通过 HTTPS 访问 QD 框架, 请确保已正确配置 HTTPS 及证书
+# 启用后仅支持通过 HTTPS 访问 QDX, 请确保已正确配置 HTTPS 及证书
 # HTTP 访问将导致 Cookie 无法正常设置, 无法登录和使用框架功能
 
 cookie_secret = hashlib.sha256(
@@ -75,8 +75,8 @@ class mysql:
     ## 数据库连接参数, 建议基于 MySQL URL 自动设置, 可选
     host = mysql_url.hostname or "localhost"  # 访问 MySQL 的 Hostname
     port = mysql_url.port or "3306"  # MySQL 的 端口Port
-    database = mysql_url.path[1:] or "qd"  # QD 框架的数据库名
-    user = mysql_url.username or "qd"  # 拥有访问 MySQL 内 QD 框架数据库权限的用户名
+    database = mysql_url.path[1:] or "qd"  # QDX 的数据库名
+    user = mysql_url.username or "qd"  # 拥有访问 MySQL 内 QDX 数据库权限的用户名
     passwd = mysql_url.password or None  # 用户名对应的密码
     auth_plugin = parse_qs(mysql_url.query).get("auth_plugin", [""])[
         0
@@ -224,7 +224,7 @@ traceback_print = bool(
 )  # 是否启用在控制台日志中打印 Exception 的 TraceBack 信息
 push_pic = os.getenv(
     "PUSH_PIC_URL",
-    "https://gitee.com/qd-today/qd/raw/master/web/static/img/push_pic.png",
+    "",
 )  # 日志推送默认图片地址
 push_batch_sw = bool(
     strtobool(os.getenv("PUSH_BATCH_SW", "True"))
@@ -321,7 +321,7 @@ mail_domain_https = bool(strtobool(os.getenv("ENABLE_HTTPS", "False"))) or bool(
     strtobool(os.getenv("MAIL_DOMAIN_HTTPS", "False"))
 )  # ))# 发送的邮件链接启用 HTTPS, 非框架自身 HTTPS 开关, 需要 HTTPS 请使用外部反向代理
 ## Mailgun 邮件发送方式配置
-## Mailgun 中 Domain 为 QD 框架域名 `domain` 的值
+## Mailgun 中 Domain 为 QDX 域名 `domain` 的值
 mailgun_key = os.getenv(
     "MAILGUN_KEY", ""
 )  # Mailgun Api_Key, 若不为空则优先用 Mailgun 方式发送邮件

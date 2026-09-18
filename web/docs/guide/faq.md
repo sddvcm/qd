@@ -14,18 +14,18 @@ docker cp database.db container_name:/usr/src/app/config/
 ## how to configure the email server in Docker?
 
 ```sh
-docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --env MAIL_SMTP=$STMP_Server_ --env MAIL_PORT=$Mailbox_server_port --env MAIL_USER=$Username --env MAIL_PASSWORD=$Password --env DOMAIN=$Domain qdtoday/qd
+docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --env MAIL_SMTP=$STMP_Server_ --env MAIL_PORT=$Mailbox_server_port --env MAIL_USER=$Username --env MAIL_PASSWORD=$Password --env DOMAIN=$Domain ghcr.io/sddvcm/qd
 ```
 
 ## how to use MySQL in Docker?
 
 ```sh
-docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --ENV DB_TYPE=mysql --ENV JAWSDB_MARIA_URL=mysql://$username:$password@$hostname:$port/$database_name?auth_plugin= qdtoday/qd
+docker run -d --name qd -p 8923:80 -v $(pwd)/qd/config:/usr/src/app/config --ENV DB_TYPE=mysql --ENV JAWSDB_MARIA_URL=mysql://$username:$password@$hostname:$port/$database_name?auth_plugin= ghcr.io/sddvcm/qd
 ```
 
 ## how to build a Docker image by myself?
 
-Please refer to the build file [Dockerfile](https://github.com/qd-today/qd/blob/master/Dockerfile) of this image.
+Please refer to the build file [Dockerfile](https://github.com/sddvcm/qd/blob/master/Dockerfile) of this image.
 
 ## How to view the API and Jinja2 template variables supported by the current framework?
 
@@ -33,7 +33,7 @@ Please access the home page of the framework, and then click the `Common API/Fil
 
 ## how to submit a bug issue?
 
-Please enable `Debug` mode after encountering a problem, and then submit detailed error information to [Issue](https://github.com/qd-today/qd/issues).
+Please enable `Debug` mode after encountering a problem, and then submit detailed error information to [Issue](https://github.com/sddvcm/qd/issues).
 
 ## Which requests are necessary for QD?
 
@@ -111,7 +111,7 @@ Please refer to [Pusher](/toolbox/pusher) for details.
 
 ## Subscribe updating page prompts undefined error
 
-- [issue#423](https://github.com/qd-today/qd/issues/423)
+- [issue#423](https://github.com/sddvcm/qd/issues/423)
 
 > The subscribe updating web page prompts an error code of undefined, or the console shows WebSocket connection failed but does not show the reason for the error
 

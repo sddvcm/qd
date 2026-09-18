@@ -472,7 +472,7 @@ class DBconverter:
             logger_db_converter.debug(e)
             insert = dict(
                 regEn=1,
-                repos='{"repos":[{"reponame":"default","repourl":"https://github.com/qd-today/templates","repobranch":"master","repoacc":false}], "lastupdate":0}',
+                repos='{"repos":[], "lastupdate":0}',
             )
             await self.db.site._insert(Site(**insert))  # pylint: disable=protected-access
 
@@ -704,58 +704,20 @@ class DBconverter:
             logger_db_converter.debug(e)
             if config.db_type == "sqlite3":
                 await exec_shell(
-                    """ALTER TABLE `site` ADD  `repos` TEXT NOT NULL DEFAULT '{"repos":[{"reponame":"default","repourl":"https://github.com/qd-today/templates","repobranch":"master","repoacc":false}], "lastupdate":0}' """
+                    """ALTER TABLE `site` ADD  `repos` TEXT NOT NULL DEFAULT '{"repos":[], "lastupdate":0}' """
                 )
             else:
                 await exec_shell("""ALTER TABLE `site` ADD  `repos` TEXT """)
                 await exec_shell(
-                    """UPDATE `site` SET `repos` = '{"repos":[{"reponame":"default","repourl":"https://github.com/qd-today/templates","repobranch":"master","repoacc":false}], "lastupdate":0}' WHERE `site`.`id` = 1 """
+                    """UPDATE `site` SET `repos` = '{"repos":[], "lastupdate":0}' WHERE `site`.`id` = 1 """
                 )
 
         try:
             tmp = (await self.db.site.get("1", fields=("repos",)))["repos"]
             if tmp is None or tmp == "":
                 await exec_shell(
-                    """UPDATE `site` SET `repos` = '{"repos":[{"reponame":"default","repourl":"https://github.com/qd-today/templates","repobranch":"master","repoacc":false}], "lastupdate":0}' WHERE `site`.`id` = 1 """
+                    """UPDATE `site` SET `repos` = '{"repos":[], "lastupdate":0}' WHERE `site`.`id` = 1 """
                 )
-        except Exception as e:
-            logger_db_converter.debug(e)
-
-        try:
-            repo = await self.db.site.get("1", fields=("repos",))
-            if (
-                isinstance(repo, dict)
-                and repo.get("repos")
-                and isinstance(repo["repos"], str)
-                and repo["repos"].find("qiandao-today/templates") > 0
-            ):
-                async with self.db.transaction() as sql_session:
-                    repos = json.loads(repo["repos"])
-                    tmp = repos["repos"]
-                    result = []
-                    for _, j in enumerate(tmp):
-                        if j["repourl"].find("qiandao-today/templates") > 0:
-                            j["repourl"] = j["repourl"].replace(
-                                "qiandao-today/templates", "qd-today/templates"
-                            )
-                            pubtpls = await self.db.pubtpl.list(
-                                reponame=j["reponame"],
-                                fields=("id",),
-                                sql_session=sql_session,
-                            )
-                            for pubtpl in pubtpls:
-                                await self.db.pubtpl.delete(
-                                    pubtpl["id"], sql_session=sql_session
-                                )
-                        result.append(j)
-
-                    await self.db.site.mod(
-                        1,
-                        repos=repo["repos"].replace(
-                            "qiandao-today/templates", "qd-today/templates"
-                        ),
-                        sql_session=sql_session,
-                    )
         except Exception as e:
             logger_db_converter.debug(e)
 
