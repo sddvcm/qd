@@ -1,201 +1,220 @@
 #!/bin/bash
 # QDX 生命周期主脚本 - 处理 start / stop / status
 #
-# 运行方式: 原生模式（非 Docker），在 fnOS 主机上直接以应用用户身份运行 Python 进程。
-# 进程通过 PID 文件管理，日志写到 TRIM_PKGVAR。
+# 架构与 relay-monitor 一致：
+#   - 包内自带独立 Python 3.12 解释器（python-build-standalone），
+#     首次启动时解压到 TRIM_PKGVAR/runtime，完全不依赖系统 Python。
+#   - 依赖 wheels 离线安装到内置解释器，目标 ABI cp312 恒定匹配。
+#   - 初始化（解压/装依赖/导模板）在首次启动时进行，失败有日志可查。
+#
+# fnOS 注入变量:
+#   TRIM_APPDEST  = 应用目录(app/, 升级时替换)
+#   TRIM_PKGVAR   = 运行时数据目录(var/, 升级不替换, 持久)
 
 set -u
 
-APP_DIR="${TRIM_APPDEST}"
-DATA_DIR="${TRIM_PKGVAR}"
-ETC_DIR="${TRIM_PKGETC}"
-TMP_DIR="${TRIM_PKGTMP}"
-LOG_FILE="${TRIM_PKGVAR}/qdx.log"
-PID_FILE="${TRIM_PKGVAR}/qdx.pid"
+APP="${TRIM_APPDEST:-.}"
+VAR="${TRIM_PKGVAR:-/usr/local/apps/@appdata/qdx}"
+
+# fnOS 把 app.tgz 解压到应用目录, TRIM_APPDEST 可能指向该目录本身,
+# 也可能指向其父目录。自动探测, 兼容两种布局。
+if [ -f "$APP/app/python/python.tar.gz" ]; then
+  APP_ROOT="$APP/app"
+elif [ -f "$APP/python/python.tar.gz" ]; then
+  APP_ROOT="$APP"
+else
+  APP_ROOT="$APP"
+fi
+
+RT="${VAR}/runtime"
+PYBIN="${RT}/python/bin/python3.12"
+PY_TAR="${APP_ROOT}/python/python.tar.gz"
+WHEELS="${APP_ROOT}/wheels"
+SRC="${APP_ROOT}"
+PID="${VAR}/qdx.pid"
+LOG="${VAR}/qdx.log"
+
 SERVICE_PORT="${TRIM_SERVICE_PORT:-8923}"
-VENV_DIR="${TRIM_PKGVAR}/venv"
-PY=""   # 由 resolve_python 填充
 
 log() {
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "${LOG_FILE}" 2>/dev/null
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "${LOG}" 2>/dev/null
 }
 
-fail() {
-    # 向用户可见的日志文件输出错误
-    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
-        echo "$*" > "${TRIM_TEMP_LOGFILE}"
-    fi
-    log "ERROR: $*"
-    exit 1
-}
-
-# 定位 Python 解释器。
-# 优先用安装时创建的虚拟环境; 系统缺 python3-venv 时安装脚本会退化为
-# sitepkg 模式（依赖装在 TRIM_PKGVAR/pylibs，用系统 Python + PYTHONPATH）。
-resolve_python() {
-    if [ -n "${PY}" ] && [ -x "${PY}" ]; then
-        return 0
-    fi
-
-    if [ -x "${VENV_DIR}/bin/python" ]; then
-        PY="${VENV_DIR}/bin/python"
-        return 0
-    fi
-
-    # sitepkg 模式: 依赖在 pylibs, 用系统 Python 并注入 PYTHONPATH
-    if [ -d "${TRIM_PKGVAR}/pylibs" ]; then
-        for candidate in python3 python3.11 python3.10 python3.12 python3.9; do
-            if command -v "${candidate}" >/dev/null 2>&1; then
-                PY="$(command -v "${candidate}")"
-                export PYTHONPATH="${TRIM_PKGVAR}/pylibs${PYTHONPATH:+:${PYTHONPATH}}"
-                log "使用系统 Python + pylibs: ${PY}"
-                return 0
-            fi
-        done
-    fi
-
-    return 1
-}
-
-# 检查进程是否存活（读取 PID 文件并验证进程存在）
+# ---- 进程探活 ----
 is_running() {
-    if [ ! -f "${PID_FILE}" ]; then
-        return 1
+  if [ -f "$PID" ]; then
+    p=$(cat "$PID" 2>/dev/null)
+    if [ -n "$p" ] && kill -0 "$p" 2>/dev/null; then
+      return 0
     fi
-    local pid
-    pid=$(cat "${PID_FILE}" 2>/dev/null)
-    if [ -z "${pid}" ]; then
-        return 1
+    rm -f "$PID"
+  fi
+  return 1
+}
+
+# ---- 生成持久化配置（幂等，每次启动前重建，升级后自动恢复）----
+gen_config() {
+  cat > "${SRC}/local_config.py" << PYEOF
+# -*- coding: utf-8 -*-
+# QDX 由 fnOS 生命周期脚本自动生成，请勿手动修改。
+
+import os
+
+_QDX_DATA = os.environ.get("QDX_DATA_DIR", "${VAR}")
+
+
+class sqlite3:
+    path = os.path.join(_QDX_DATA, "database.db")
+
+
+# fnOS 上默认不启用 Redis，Worker 自动降级为本地队列
+redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
+PYEOF
+}
+
+# ---- 一次性准备: 解压 Python + 离线安装 wheels ----
+ensure_runtime() {
+  mkdir -p "$RT" "$VAR"
+
+  # 1. 解压内置 Python
+  if [ ! -x "$PYBIN" ]; then
+    if [ ! -f "$PY_TAR" ]; then
+      log "致命错误: 找不到内置 Python 包 $PY_TAR (APP_ROOT=$APP_ROOT)"
+      return 1
     fi
-    if kill -0 "${pid}" 2>/dev/null; then
-        return 0
+    log "解压内置 Python 解释器 (首次约 10s) ..."
+    rm -rf "${RT}/python" 2>/dev/null
+    if ! tar -xzf "$PY_TAR" -C "$RT" >> "$LOG" 2>&1; then
+      log "致命错误: Python 解压失败, 详见 $LOG"
+      return 1
     fi
-    # PID 文件存在但进程已死，清理残留
-    rm -f "${PID_FILE}"
+  fi
+  if [ ! -x "$PYBIN" ]; then
+    log "致命错误: Python 解释器 $PYBIN 不可执行"
     return 1
+  fi
+
+  # 2. 生成持久化配置
+  gen_config
+  QDX_DATA_DIR="$VAR"  # 供后续 import_templates 使用
+
+  # 3. 离线安装依赖（带完成标记，成功一次后跳过）
+  if [ ! -f "${RT}/.wheels_installed" ]; then
+    if [ ! -d "$WHEELS" ] || [ ! -f "$SRC/requirements.txt" ]; then
+      log "致命错误: 缺少 wheels 或 requirements.txt (WHEELS=$WHEELS)"
+      return 1
+    fi
+    log "离线安装内置依赖 wheels (首次约 60s) ..."
+    # 内置解释器自带 pip（python-build-standalone 完整发行版）
+    if ! "$PYBIN" -m pip install --no-index --no-cache-dir \
+        --find-links "$WHEELS" -r "$SRC/requirements.txt" >> "$LOG" 2>&1; then
+      log "批量安装失败，尝试逐个安装以定位问题包"
+      FAILED=""
+      for w in "$WHEELS"/*.whl; do
+        [ -f "$w" ] || continue
+        "$PYBIN" -m pip install --no-index --no-cache-dir "$w" >> "$LOG" 2>&1 || \
+          FAILED="$FAILED $(basename "$w")"
+      done
+      for s in "$WHEELS"/*.tar.gz; do
+        [ -f "$s" ] || continue
+        "$PYBIN" -m pip install --no-index --no-cache-dir --no-build-isolation "$s" >> "$LOG" 2>&1 || \
+          FAILED="$FAILED $(basename "$s")"
+      done
+      if [ -n "$FAILED" ]; then
+        log "致命错误: 以下依赖安装失败:$FAILED"
+        return 1
+      fi
+    fi
+    touch "${RT}/.wheels_installed"
+    log "wheels 安装完成"
+  fi
+
+  # 4. 首次启动导入内置模板（失败不阻塞启动）
+  if [ -f "${WHEELS}/../templates/tpls_history.json" ] && [ ! -f "${RT}/.templates_imported" ]; then
+    log "导入内置模板快照 ..."
+    if (cd "$SRC" && QDX_DATA_DIR="$VAR" "$PYBIN" \
+        "$SRC/deploy/fnos/scripts/import_templates.py" >> "$LOG" 2>&1); then
+      touch "${RT}/.templates_imported"
+      log "内置模板导入完成"
+    else
+      log "警告: 内置模板导入失败，可在应用内手动导入"
+    fi
+  fi
+
+  return 0
 }
 
-do_start() {
-    if is_running; then
-        log "已在运行，跳过启动 (PID=$(cat ${PID_FILE}))"
-        exit 0
-    fi
-
-    if ! resolve_python; then
-        fail "未找到可用的 Python 环境，请重新安装应用。已尝试: ${VENV_DIR}/bin/python 与系统 python3"
-    fi
-
-    if [ ! -f "${APP_DIR}/run.py" ]; then
-        fail "应用文件缺失: ${APP_DIR}/run.py"
-    fi
-
-    mkdir -p "${DATA_DIR}" "${ETC_DIR}" "${TMP_DIR}" 2>/dev/null
-
-    log "启动 QDX (端口 ${SERVICE_PORT}, Python=${PY})"
-
-    cd "${APP_DIR}" || fail "无法进入应用目录 ${APP_DIR}"
-
-    # 环境变量在 install/upgrade 阶段写入 ${ETC_DIR}/env.sh，此处加载
-    if [ -f "${ETC_DIR}/env.sh" ]; then
-        # shellcheck disable=SC1091
-        . "${ETC_DIR}/env.sh"
-    fi
-
-    # 加载 env.sh 后重新定位（可能带入 PYTHONPATH 等）
-    resolve_python || fail "加载环境变量后 Python 不可用"
-
-    # 使用 PID 文件而非 nohup 简单后台，便于 status 判断
-    PORT="${SERVICE_PORT}" \
-    BIND="0.0.0.0" \
-    PYTHONUNBUFFERED=1 \
-    QDX_DATA_DIR="${DATA_DIR}" \
-    QDX_ETC_DIR="${ETC_DIR}" \
-    "${PY}" "${APP_DIR}/run.py" >> "${LOG_FILE}" 2>&1 &
-
-    local pid=$!
-    echo "${pid}" > "${PID_FILE}"
-
-    # 等待端口就绪，最多 30 秒
-    local waited=0
-    while [ ${waited} -lt 30 ]; do
-        if ! kill -0 "${pid}" 2>/dev/null; then
-            rm -f "${PID_FILE}"
-            fail "QDX 进程启动后立即退出，请查看日志: ${LOG_FILE}"
-        fi
-        if command -v ss >/dev/null 2>&1; then
-            if ss -ltn 2>/dev/null | grep -q ":${SERVICE_PORT} "; then
-                log "端口 ${SERVICE_PORT} 已就绪 (PID=${pid})"
-                exit 0
-            fi
-        else
-            # 无 ss 命令时退化为进程存活检查
-            log "已启动 (PID=${pid})，未找到 ss 命令跳过端口检查"
-            exit 0
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
-
-    # 超时但进程还在，视为启动中
-    if kill -0 "${pid}" 2>/dev/null; then
-        log "启动超时 30s，但进程存活 (PID=${pid})，继续运行"
-        exit 0
-    fi
-
-    rm -f "${PID_FILE}"
-    fail "QDX 启动失败，请查看日志: ${LOG_FILE}"
-}
-
+# ---- 可靠停止: pidfile + 模式匹配 + 强杀兜底 ----
 do_stop() {
-    if ! is_running; then
-        log "未在运行，无需停止"
-        exit 0
-    fi
-
-    local pid
-    pid=$(cat "${PID_FILE}")
-    log "停止 QDX (PID=${pid})"
-
-    kill "${pid}" 2>/dev/null
-
-    # 优雅等待最多 15 秒
-    local waited=0
-    while [ ${waited} -lt 15 ]; do
-        if ! kill -0 "${pid}" 2>/dev/null; then
-            rm -f "${PID_FILE}"
-            log "已停止"
-            exit 0
-        fi
-        sleep 1
-        waited=$((waited + 1))
-    done
-
-    # 强制结束
-    log "优雅停止超时，强制结束 (PID=${pid})"
-    kill -9 "${pid}" 2>/dev/null
-    sleep 1
-    rm -f "${PID_FILE}"
-    exit 0
-}
-
-do_status() {
-    if is_running; then
-        exit 0    # 0 = 运行中
-    fi
-    exit 3        # 3 = 未运行
+  if [ -f "$PID" ]; then
+    p=$(cat "$PID" 2>/dev/null)
+    [ -n "$p" ] && kill "$p" 2>/dev/null
+  fi
+  # 按完整路径匹配，避免误杀其它包含 run.py 字样的进程
+  pkill -f "$SRC/run.py" 2>/dev/null
+  sleep 1
+  pkill -9 -f "$SRC/run.py" 2>/dev/null
+  rm -f "$PID"
 }
 
 case "${1:-}" in
-    start)
-        do_start
-        ;;
-    stop)
-        do_stop
-        ;;
-    status)
-        do_status
-        ;;
-    *)
-        fail "未知命令: ${1:-（空）}，支持 start / stop / status"
-        ;;
+  start)
+    if is_running; then
+      log "已在运行 (PID=$(cat $PID 2>/dev/null))"
+      exit 0
+    fi
+    if ! ensure_runtime; then
+      log "初始化失败，启动中止"
+      exit 1
+    fi
+    mkdir -p "$VAR"
+    log "启动 QDX (端口 ${SERVICE_PORT}, Python=$PYBIN)"
+    cd "$SRC" || { log "致命错误: 无法进入 $SRC"; exit 1; }
+    PORT="${SERVICE_PORT}" \
+    BIND="0.0.0.0" \
+    PYTHONUNBUFFERED=1 \
+    QDX_DATA_DIR="$VAR" \
+    TEMPPATH="$VAR/temp" \
+    nohup "$PYBIN" "$SRC/run.py" >> "$LOG" 2>&1 &
+    echo $! > "$PID"
+
+    # 等待端口就绪，最多 30 秒
+    waited=0
+    while [ $waited -lt 30 ]; do
+      if ! kill -0 "$(cat $PID)" 2>/dev/null; then
+        rm -f "$PID"
+        log "致命错误: QDX 进程启动后立即退出，详见 $LOG"
+        exit 1
+      fi
+      if command -v ss >/dev/null 2>&1; then
+        if ss -ltn 2>/dev/null | grep -q ":${SERVICE_PORT} "; then
+          log "端口 ${SERVICE_PORT} 已就绪"
+          exit 0
+        fi
+      else
+        log "已启动 (PID=$(cat $PID))，未找到 ss 命令跳过端口检查"
+        exit 0
+      fi
+      sleep 1
+      waited=$((waited + 1))
+    done
+
+    if kill -0 "$(cat $PID 2>/dev/null)" 2>/dev/null; then
+      log "启动超时 30s，但进程存活，继续运行"
+      exit 0
+    fi
+    rm -f "$PID"
+    log "致命错误: QDX 启动失败，详见 $LOG"
+    exit 1
+    ;;
+  stop)
+    do_stop
+    exit 0
+    ;;
+  status)
+    if is_running; then exit 0; else exit 3; fi
+    ;;
+  *)
+    exit 1
+    ;;
 esac

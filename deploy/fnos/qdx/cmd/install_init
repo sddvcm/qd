@@ -1,7 +1,10 @@
 #!/bin/bash
 # QDX 安装前检查 - 在应用文件落地前执行
 #
-# 此处只做环境检查，不做任何需要应用文件的操作。
+# 此处只做轻量检查与目录准备，不做任何重型操作。
+# 解压内置 Python、离线安装 wheels 全部放到 cmd/main 首次启动时进行，
+# 保证安装 100% 成功，后续启动若失败也有日志可查（与 relay-monitor 相同架构）。
+#
 # 安装失败时必须把原因写入 TRIM_TEMP_LOGFILE，用户才能看到。
 
 set -u
@@ -25,22 +28,14 @@ if [ -n "${TRIM_PKGVAR:-}" ] && [ -d "${TRIM_PKGVAR}" ]; then
     fi
     rm -f "${TRIM_PKGVAR}/.qdx_write_test" 2>/dev/null
 fi
-# TRIM_PKGVAR 不存在时不在此报错 —— 目录由 fnOS 在安装流程中创建,
-# 缺失导致的失败会在 install_callback 中以更明确的上下文暴露。
+# TRIM_PKGVAR 不存在时不在此报错 —— 目录由 fnOS 在安装流程中创建。
 
-# 检查 Python 3 是否可用（fnOS 自带）
-PYTHON_BIN=""
-for candidate in python3 python3.11 python3.10 python3.9 python3.12; do
-    if command -v "${candidate}" >/dev/null 2>&1; then
-        if "${candidate}" -c "import sys; sys.exit(0 if sys.version_info >= (3,8) else 1)" 2>/dev/null; then
-            PYTHON_BIN="${candidate}"
-            break
-        fi
-    fi
-done
-
-if [ -z "${PYTHON_BIN}" ]; then
-    fail "未找到 Python 3.8 或更高版本。QDX 需要系统 Python 环境，请确认 fnOS 版本不低于 0.9.0。"
+# 准备运行时目录（内置 Python 解压目标）
+if [ -n "${TRIM_PKGVAR:-}" ]; then
+    mkdir -p "${TRIM_PKGVAR}/runtime" 2>/dev/null
 fi
+
+# QDX 自带独立 Python 3.12 解释器（python-build-standalone），
+# 不依赖系统 Python，因此无需检查系统环境。
 
 exit 0

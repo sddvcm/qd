@@ -15,12 +15,20 @@ log() {
 
 log "--- 卸载清理 ---"
 
-# 清理虚拟环境（可由安装流程重建，不必保留）
-VENV_DIR="${DATA_DIR}/venv"
-if [ -d "${VENV_DIR}" ]; then
-    rm -rf "${VENV_DIR}" 2>/dev/null
-    log "已清理虚拟环境: ${VENV_DIR}"
+# 清理运行时（内置 Python 解压产物 + wheels 安装标记，均可重建）
+RT_DIR="${DATA_DIR}/runtime"
+if [ -d "${RT_DIR}" ]; then
+    rm -rf "${RT_DIR}" 2>/dev/null
+    log "已清理运行时: ${RT_DIR}"
 fi
+
+# 兼容清理旧版本的虚拟环境/独立 site 目录
+for old_dir in "${DATA_DIR}/venv" "${DATA_DIR}/pylibs" "${DATA_DIR}/pyuserbase"; do
+    if [ -d "$old_dir" ]; then
+        rm -rf "$old_dir" 2>/dev/null
+        log "已清理旧目录: $old_dir"
+    fi
+done
 
 # 确认服务已停止
 if pgrep -f "run.py" >/dev/null 2>&1; then

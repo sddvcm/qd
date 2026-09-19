@@ -1,11 +1,11 @@
 #!/bin/bash
-# QDX 升级后 - 在应用文件替换完成后执行
+# QDX 升级后处理 - 在应用文件替换完成后执行
 #
-# 职责:
-#   1. 重新生成持久化配置（源码目录被替换，local_config.py 会丢失）
-#   2. 依赖有变化时增量离线安装
-#   3. 更新内置模板快照（新版可能带新模板）
-#   4. 重启服务
+# 保持轻量（与 relay-monitor 相同架构）：
+#   1. 备份数据库
+#   2. 清除 wheels/模板初始化标记 —— 下次启动时 cmd/main 的 ensure_runtime
+#      会自动重新离线安装依赖（pip 全部已满足时秒级完成）并增量同步模板
+#   3. 重启服务
 #
 # 数据库始终在 TRIM_PKGVAR，不参与替换，因此数据不会丢失。
 
@@ -13,106 +13,47 @@ set -u
 
 APP_DIR="${TRIM_APPDEST}"
 DATA_DIR="${TRIM_PKGVAR}"
-ETC_DIR="${TRIM_PKGETC}"
-WHEELS_DIR="${APP_DIR}/wheels"
-TEMPLATES_DIR="${APP_DIR}/templates"
-VENV_DIR="${DATA_DIR}/venv"
-VENV_PY="${VENV_DIR}/bin/python"
+RT="${DATA_DIR}/runtime"
 LOG_FILE="${DATA_DIR}/upgrade.log"
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${LOG_FILE}" 2>/dev/null
 }
 
-fail() {
-    local msg="$1"
-    log "ERROR: ${msg}"
-    if [ -n "${TRIM_TEMP_LOGFILE:-}" ]; then
-        echo "${msg}" > "${TRIM_TEMP_LOGFILE}"
-    fi
-    exit 1
-}
+log "--- 升级后处理: ${TRIM_APPVER:-?} ---"
 
-log "--- 升级后处理 ---"
-
-# ---------------------------------------------------------------
-# 1. 重新生成持久化配置
-# ---------------------------------------------------------------
-LOCAL_CONFIG="${APP_DIR}/local_config.py"
-
-cat > "${LOCAL_CONFIG}" << PYEOF
-# -*- coding: utf-8 -*-
-# QDX 由 fnOS 生命周期脚本自动生成，请勿手动修改。
-
-import os
-
-_QDX_DATA = os.environ.get("QDX_DATA_DIR", "${DATA_DIR}")
-
-
-class sqlite3:
-    path = os.path.join(_QDX_DATA, "database.db")
-
-
-redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379")
-PYEOF
-
-log "持久化配置已重新生成"
-
-cat > "${ETC_DIR}/env.sh" << ENVEOF
-QDX_DATA_DIR="${DATA_DIR}"
-QDX_ETC_DIR="${ETC_DIR}"
-ENVEOF
-
-# ---------------------------------------------------------------
-# 2. 增量安装依赖
-# ---------------------------------------------------------------
-if [ -x "${VENV_PY}" ] && [ -d "${WHEELS_DIR}" ]; then
-    log "检查依赖变更"
-    if ! "${VENV_PY}" -m pip install \
-            --no-index \
-            --find-links "${WHEELS_DIR}" \
-            --no-cache-dir \
-            -r "${APP_DIR}/requirements.txt" >> "${LOG_FILE}" 2>&1; then
-        log "警告: 依赖更新失败，服务可能无法启动。详见日志。"
+# 1. 备份数据库
+DB_FILE="${DATA_DIR}/database.db"
+if [ -f "$DB_FILE" ]; then
+    BACKUP_DIR="${DATA_DIR}/backup/upgrade-$(date +%Y%m%d%H%M%S)"
+    mkdir -p "$BACKUP_DIR" 2>/dev/null
+    if cp -f "$DB_FILE" "$BACKUP_DIR/database.db" 2>/dev/null; then
+        log "数据库已备份到 $BACKUP_DIR/database.db"
     else
-        log "依赖已是最新"
+        log "警告: 数据库备份失败，但升级继续"
     fi
-else
-    log "虚拟环境缺失，执行完整安装"
-    if [ -x "${VENV_PY}" ]; then
-        :  # 已有 env
-    else
-        fail "虚拟环境不存在: ${VENV_DIR}，请卸载后重新安装。"
-    fi
+    # 只保留最近 5 份备份
+    ls -1dt "${DATA_DIR}/backup"/upgrade-* 2>/dev/null | tail -n +6 | while read -r old; do
+        rm -rf "$old" 2>/dev/null
+    done
 fi
 
-# ---------------------------------------------------------------
-# 3. 更新内置模板
-# ---------------------------------------------------------------
-if [ -f "${TEMPLATES_DIR}/tpls_history.json" ] && [ -x "${VENV_PY}" ]; then
-    log "同步内置模板快照"
-    cd "${APP_DIR}" || fail "无法进入应用目录"
-    if QDX_DATA_DIR="${DATA_DIR}" "${VENV_PY}" "${APP_DIR}/deploy/fnos/scripts/import_templates.py" --incremental >> "${LOG_FILE}" 2>&1; then
-        log "模板同步完成"
-    else
-        log "警告: 模板同步失败，不影响已有模板"
-    fi
-fi
+# 2. 清除初始化标记，让 ensure_runtime 重新执行（依赖已满足时很快）
+rm -f "${RT}/.wheels_installed" "${RT}/.templates_imported" 2>/dev/null
+log "已重置初始化标记，依赖与模板将在下次启动时自动更新"
 
-# ---------------------------------------------------------------
-# 4. 重启服务
-# ---------------------------------------------------------------
+# 3. 重启服务
 log "重启服务"
 if [ -x "${APP_DIR}/cmd/main" ]; then
     "${APP_DIR}/cmd/main" start >> "${LOG_FILE}" 2>&1
     if [ $? -eq 0 ]; then
         log "服务已重启"
     else
-        log "警告: 服务重启失败，请手动启动"
+        log "警告: 服务重启失败，请手动启动后查看日志"
     fi
 else
     log "警告: 未找到 cmd/main，跳过自动启动"
 fi
 
-log "=== 升级完成: ${TRIM_APPVER:-?} ==="
+log "=== 升级完成 ==="
 exit 0

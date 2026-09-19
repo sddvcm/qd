@@ -1,5 +1,5 @@
 appname               = qdx
-version               = 1.0.1
+version               = 1.1.0
 display_name          = QDX 签到框架
 desc                  = QDX —— HTTP 请求定时任务自动执行框架（基于 QD 二次开发）。内置 388 个公共模板，支持导入导出订阅源，支持程序内一键更新，无需重装。
 platform              = all
