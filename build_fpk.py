@@ -68,6 +68,12 @@ SKIP_FILES = {
 NO_WHEEL_PACKAGES = {"pycurl"}  # 自动降级，安装时剔除
 SRC_ONLY_PACKAGES = {"pbkdf2": "pbkdf2==1.3"}  # 纯 Python，以源码包内置
 
+# pip 引导包：必须内置。
+# 飞牛的 python3 -m venv 未必带 pip（Debian 的精简 python3-venv 常缺 ensurepip），
+# 而安装脚本依赖 venv 内的 pip 来装依赖。把 pip 自身作为 wheel 一起打包，
+# 无论目标环境是否自带 pip 都能装起来。
+BOOTSTRAP_PACKAGES = ["pip"]
+
 
 def log(msg):
     print(f"[build] {msg}", flush=True)
@@ -462,11 +468,27 @@ def download_wheels(dl_list):
     """下载目标平台的依赖 wheel。dl_list 为仅含 wheel 依赖的列表文件。"""
     os.makedirs(FPK_WHEELS, exist_ok=True)
 
-    existing = len([f for f in os.listdir(FPK_WHEELS) if f.endswith((".whl", ".tar.gz"))])
-    if existing >= 30:
-        total = sum(os.path.getsize(os.path.join(FPK_WHEELS, f)) for f in os.listdir(FPK_WHEELS))
-        log(f"依赖已存在: {existing} 个文件, {total / 1024 / 1024:.2f}MB")
+    # 缓存判断必须校验完整性，不能只看数量。
+    # 曾经因为只数了"文件数 >= 30"就跳过，导致后来新增的必需包（pip 引导包）
+    # 被静默漏掉，打出的包在目标机上装不起来。这里逐项校验。
+    existing = [f for f in os.listdir(FPK_WHEELS) if f.endswith((".whl", ".tar.gz"))]
+
+    def has(prefix):
+        p = prefix.lower()
+        return any(f.lower().startswith(p) for f in existing)
+
+    needed = ["tornado", "sqlalchemy", "aiohttp", "aiosqlite", "cryptography",
+              "jinja2", "pbkdf2"]
+    needed += BOOTSTRAP_PACKAGES
+    missing = [p for p in needed if not has(p)]
+
+    if existing and not missing:
+        total = sum(os.path.getsize(os.path.join(FPK_WHEELS, f)) for f in existing)
+        log(f"依赖已存在且完整: {len(existing)} 个文件, {total / 1024 / 1024:.2f}MB")
         return True
+
+    if missing:
+        log(f"依赖缓存不完整，缺少: {', '.join(missing)}")
 
     log(f"下载依赖 wheel（{TARGET_PLATFORM} / {TARGET_ABI}）...")
 
@@ -498,6 +520,23 @@ def download_wheels(dl_list):
             log(f"  {pkg} 源码包下载失败")
             return False
         log(f"  {pkg} 源码包已下载")
+
+    # pip 引导包：纯 Python wheel, 不限制平台
+    for pkg in BOOTSTRAP_PACKAGES:
+        s3 = subprocess.run(
+            [sys.executable, "-m", "pip", "download", "--dest", FPK_WHEELS,
+             "--only-binary=:all:", "--no-deps", pkg],
+            capture_output=True, text=True,
+        )
+        if s3.returncode != 0:
+            log(f"  警告: {pkg} 引导包下载失败, 目标环境若无 pip 将无法安装依赖")
+        else:
+            log(f"  {pkg} 引导包已下载")
+
+    # 校验关键 wheel 存在
+    names = os.listdir(FPK_WHEELS)
+    if not any(n.lower().startswith("pip-") for n in names):
+        log("  警告: 包内缺少 pip wheel")
 
     files = os.listdir(FPK_WHEELS)
     total = sum(os.path.getsize(os.path.join(FPK_WHEELS, f)) for f in files)

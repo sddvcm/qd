@@ -14,7 +14,7 @@ LOG_FILE="${TRIM_PKGVAR}/qdx.log"
 PID_FILE="${TRIM_PKGVAR}/qdx.pid"
 SERVICE_PORT="${TRIM_SERVICE_PORT:-8923}"
 VENV_DIR="${TRIM_PKGVAR}/venv"
-PY="${VENV_DIR}/bin/python"
+PY=""   # 由 resolve_python 填充
 
 log() {
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "${LOG_FILE}" 2>/dev/null
@@ -27,6 +27,34 @@ fail() {
     fi
     log "ERROR: $*"
     exit 1
+}
+
+# 定位 Python 解释器。
+# 优先用安装时创建的虚拟环境; 系统缺 python3-venv 时安装脚本会退化为
+# sitepkg 模式（依赖装在 TRIM_PKGVAR/pylibs，用系统 Python + PYTHONPATH）。
+resolve_python() {
+    if [ -n "${PY}" ] && [ -x "${PY}" ]; then
+        return 0
+    fi
+
+    if [ -x "${VENV_DIR}/bin/python" ]; then
+        PY="${VENV_DIR}/bin/python"
+        return 0
+    fi
+
+    # sitepkg 模式: 依赖在 pylibs, 用系统 Python 并注入 PYTHONPATH
+    if [ -d "${TRIM_PKGVAR}/pylibs" ]; then
+        for candidate in python3 python3.11 python3.10 python3.12 python3.9; do
+            if command -v "${candidate}" >/dev/null 2>&1; then
+                PY="$(command -v "${candidate}")"
+                export PYTHONPATH="${TRIM_PKGVAR}/pylibs${PYTHONPATH:+:${PYTHONPATH}}"
+                log "使用系统 Python + pylibs: ${PY}"
+                return 0
+            fi
+        done
+    fi
+
+    return 1
 }
 
 # 检查进程是否存活（读取 PID 文件并验证进程存在）
@@ -53,8 +81,8 @@ do_start() {
         exit 0
     fi
 
-    if [ ! -x "${PY}" ]; then
-        fail "Python 虚拟环境不存在，请重新安装应用。期望路径: ${VENV_DIR}"
+    if ! resolve_python; then
+        fail "未找到可用的 Python 环境，请重新安装应用。已尝试: ${VENV_DIR}/bin/python 与系统 python3"
     fi
 
     if [ ! -f "${APP_DIR}/run.py" ]; then
@@ -63,7 +91,7 @@ do_start() {
 
     mkdir -p "${DATA_DIR}" "${ETC_DIR}" "${TMP_DIR}" 2>/dev/null
 
-    log "启动 QDX (端口 ${SERVICE_PORT})"
+    log "启动 QDX (端口 ${SERVICE_PORT}, Python=${PY})"
 
     cd "${APP_DIR}" || fail "无法进入应用目录 ${APP_DIR}"
 
@@ -72,6 +100,9 @@ do_start() {
         # shellcheck disable=SC1091
         . "${ETC_DIR}/env.sh"
     fi
+
+    # 加载 env.sh 后重新定位（可能带入 PYTHONPATH 等）
+    resolve_python || fail "加载环境变量后 Python 不可用"
 
     # 使用 PID 文件而非 nohup 简单后台，便于 status 判断
     PORT="${SERVICE_PORT}" \
